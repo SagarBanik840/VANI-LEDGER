@@ -1,0 +1,8 @@
+description = "Run backend tests and summarize failures"
+prompt = """
+Run `uv run pytest -q`.
+
+Summarize every failure with file:line and the assertion diff.
+Do not modify tests to make them pass. Do not skip tests.
+If everything passes, report the count and stop.
+"""

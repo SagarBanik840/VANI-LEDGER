@@ -1,0 +1,13 @@
+description = "Run the forecast backtest gate"
+prompt = """
+Run `uv run python eval/backtest.py --gate`.
+
+Report:
+1. Revenue-weighted WAPE.
+2. WAPE for A/B/C segments.
+3. Baseline lift vs seasonal naive.
+4. Pinball loss at p50 and p90.
+5. Pass/fail for each gate in `eval/gates.yaml`.
+
+Do not tune hyperparameters or edit data in this command.
+"""

@@ -1,0 +1,26 @@
+{
+  "version": 2,
+  "skills": {
+    "find-skills": {
+      "source": "vercel-labs/skills",
+      "commit": "57217cf86ba38148a57af9e90d14a4c049558330",
+      "sourceType": "github",
+      "skillPath": "skills/find-skills/SKILL.md",
+      "computedHash": "7bc223e2aafbdbf6e50ea243ba6ef67fe432bb069ab439fea0390795dac0bf7f"
+    },
+    "pdf": {
+      "source": "anthropics/skills",
+      "commit": "e4bb5d960d87126ff3b3a8af1a104b7db67560ba",
+      "sourceType": "github",
+      "skillPath": "skills/pdf/SKILL.md",
+      "computedHash": "c9c58ce1e1c334d4beb50dfe97aee27aee1d074aed17b3aa1df03b8982028200"
+    },
+    "pptx": {
+      "source": "anthropics/skills",
+      "commit": "e4bb5d960d87126ff3b3a8af1a104b7db67560ba",
+      "sourceType": "github",
+      "skillPath": "skills/pptx/SKILL.md",
+      "computedHash": "e3c37c284de3a271a7e135d0cea5ead7cfaf002b83719d72e958963ccc5dd52f"
+    }
+  }
+}

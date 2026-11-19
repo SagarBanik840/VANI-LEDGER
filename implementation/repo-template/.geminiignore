@@ -1,0 +1,25 @@
+# secrets and local config
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# data and generated artifacts
+data/raw/
+data/fixtures/*.wav
+*.sqlite
+*.db
+models/*.txt
+models/*.pkl
+
+# tooling
+.venv/
+node_modules/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+dist/
+build/
+.next/
+coverage/

@@ -1,0 +1,10 @@
+description = "Run the security test suite"
+prompt = """
+Run `uv run pytest tests/security -q`.
+
+Confirm these cases are covered and passing:
+SQL injection, IDOR, oversized upload, wrong magic bytes,
+prompt injection, 429 threshold, mass assignment, missing/expired token.
+
+Report any missing test, not just failures.
+"""

@@ -1,0 +1,18 @@
+{
+  "context": {
+    "fileName": ["GEMINI.md"]
+  },
+  "tools": {
+    "sandbox": "docker"
+  },
+  "mcpServers": {
+    "postgres-ro": {
+      "command": "bash",
+      "args": ["scripts/mcp-postgres.sh"]
+    },
+    "playwright": {
+      "command": "npx",
+      "args": ["-y", "@playwright/mcp@latest"]
+    }
+  }
+}
