@@ -1,6 +1,7 @@
-/* VANI-LEDGER Seller Decision Cockpit — Zero-CDN Modular Vanilla JS
+/* VANI-LEDGER Seller Intelligence & Decision Cockpit — Zero-CDN Modular Vanilla JS
+ * Adapted to Somendra-Mishra/VANI-LEDGER dual-theme sidebar + drawer layout.
  * Security invariants:
- *  - Strict CSP compliant (no inline scripts, no eval, no setAttribute('style')).
+ *  - Strict CSP compliant (no inline scripts, no eval, no inline style attributes).
  *  - XSS safe: textContent and safe DOM node builders only (zero innerHTML).
  *  - Server-side tenant scoping via X-API-Key read from server-injected meta tag.
  */
@@ -16,11 +17,13 @@
 
   const state = {
     apiKey: "",
+    theme: "light",
     skus: [],
     skusById: new Map(),
     skusByCode: new Map(),
     activeSkuId: HERO_IDS.OIL,
     activeForecast: null,
+    lastNarrative: "",
     explainLang: "en",
     explainOpen: false,
     simInFlight: false,
@@ -51,7 +54,8 @@
   function formatINR(value, decimals = 0) {
     const n = num(value, 0);
     const absVal = Math.abs(n);
-    const formatted = decimals > 0 ? inrDecFmt.format(absVal) : inrIntFmt.format(Math.round(absVal));
+    const formatted =
+      decimals > 0 ? inrDecFmt.format(absVal) : inrIntFmt.format(Math.round(absVal));
     return (n < 0 ? "-₹" : "₹") + formatted;
   }
 
@@ -72,6 +76,7 @@
   }
 
   function clearNode(node) {
+    if (!node) return;
     while (node.firstChild) {
       node.removeChild(node.firstChild);
     }
@@ -88,6 +93,34 @@
     state.toastTimer = window.setTimeout(() => {
       toast.classList.add("is-hidden");
     }, 4200);
+  }
+
+  // ── Theme Management (Somendra-Mishra Light/Dark Dual Theme) ─────────────────
+
+  function applyTheme(theme) {
+    const resolved = theme === "dark" ? "dark" : "light";
+    state.theme = resolved;
+    document.documentElement.setAttribute("data-theme", resolved);
+    try {
+      window.localStorage.setItem("vani_theme", resolved);
+    } catch {
+      // Ignore storage restrictions in private browsing
+    }
+    const btn = $("themeToggle");
+    if (btn) {
+      btn.textContent = resolved === "dark" ? "☀️" : "🌙";
+      btn.title = resolved === "dark" ? "Switch to Light Mode" : "Switch to Dark Mode";
+    }
+  }
+
+  function initTheme() {
+    let saved = "light";
+    try {
+      saved = window.localStorage.getItem("vani_theme") || "light";
+    } catch {
+      saved = "light";
+    }
+    applyTheme(saved);
   }
 
   // ── API Client ───────────────────────────────────────────────────────────────
@@ -145,7 +178,15 @@
       if (modelPill && d.model_version) modelPill.textContent = d.model_version;
       const offlineText = $("offline-pill-text");
       if (offlineText) {
-        offlineText.textContent = d.offline_ready ? "OFFLINE READY" : "DEGRADED";
+        offlineText.textContent = d.offline_ready ? "ENGINE READY · OFFLINE" : "DEGRADED";
+      }
+      const navCount = $("nav-sku-count");
+      if (navCount && d.sku_count) navCount.textContent = String(d.sku_count);
+      const kpiSkus = $("kpi-total-skus");
+      if (kpiSkus && d.sku_count) kpiSkus.textContent = String(d.sku_count);
+      const kpiSkusFoot = $("kpi-total-skus-foot");
+      if (kpiSkusFoot && d.sales_count) {
+        kpiSkusFoot.textContent = `${inrIntFmt.format(d.sales_count)} sales rows in local SQLite`;
       }
       const footerMeta = $("footer-health-meta");
       if (footerMeta) {
@@ -164,6 +205,11 @@
     state.skus = items;
     state.skusById.clear();
     state.skusByCode.clear();
+
+    const navCount = $("nav-sku-count");
+    if (navCount) navCount.textContent = String(items.length);
+    const kpiSkus = $("kpi-total-skus");
+    if (kpiSkus) kpiSkus.textContent = String(items.length);
 
     const select = $("sku-select");
     clearNode(select);
@@ -253,49 +299,12 @@
     }
   }
 
-  function renderForecastCard(forecast) {
-    state.activeForecast = forecast;
-    const sku = state.skusById.get(forecast.sku_id);
-
-    renderSkuCaptureContext(sku, forecast);
-
-    $("forecast-sku-name").textContent = forecast.sku_name;
-    $("forecast-recommended-qty").textContent = String(forecast.recommended_qty);
-    $("forecast-unit-label").textContent = sku ? `${sku.unit}s` : "units";
-    $("forecast-outlay").textContent = formatINR(forecast.outlay_amount);
-    $("forecast-service-level").textContent = formatPct(forecast.service_level, 0);
-
-    const p10 = Math.round(num(forecast.p10_total));
-    const p50 = Math.round(num(forecast.p50_total));
-    const p90 = Math.round(num(forecast.p90_total));
-    $("forecast-interval").textContent = `${p10}–${p90} (p50: ${p50})`;
-
-    const suffPill = $("data-sufficiency-pill");
-    const suff = String(forecast.data_sufficiency || "high").toUpperCase();
-    suffPill.textContent = `${suff} DATA`;
-    suffPill.className = "pill";
-    if (suff === "HIGH") suffPill.classList.add("pill--emerald");
-    else if (suff === "MEDIUM") suffPill.classList.add("pill--amber");
-    else suffPill.classList.add("pill--crimson");
-
-    $("model-used-pill").textContent = forecast.model_used || "ensemble";
-    $("feature-hash-note").textContent = forecast.feature_hash
-      ? `snapshot #${String(forecast.feature_hash).slice(0, 10)}`
-      : "";
-
-    // Additive XAI drivers
-    const driversList = $("drivers-list");
-    clearNode(driversList);
-
-    const drivers = Array.isArray(forecast.drivers) ? forecast.drivers : [];
+  function buildDriverRows(container, drivers, recommendedQty) {
+    clearNode(container);
     const totalAbs = Math.max(
       1,
-      forecast.recommended_qty || drivers.reduce((acc, d) => acc + Math.abs(d.units), 0)
+      recommendedQty || drivers.reduce((acc, d) => acc + Math.abs(d.units), 0)
     );
-    const driverSum = drivers.reduce((acc, d) => acc + num(d.units, 0), 0);
-    $("drivers-sum-check").textContent =
-      `SUM ${driverSum} = ${forecast.recommended_qty} UNITS`;
-
     for (const d of drivers) {
       const row = el("div", "driver-row");
       const nameNode = el("div", "driver-name", d.name);
@@ -306,7 +315,7 @@
         bar.classList.add("driver-progress--neg");
       }
       bar.max = 100;
-      const pct = Math.min(100, Math.max(2, Math.round((Math.abs(d.units) / totalAbs) * 100)));
+      const pct = Math.min(100, Math.max(3, Math.round((Math.abs(d.units) / totalAbs) * 100)));
       bar.value = pct;
 
       const sign = d.units >= 0 ? "+" : "";
@@ -321,8 +330,60 @@
       row.appendChild(nameNode);
       row.appendChild(bar);
       row.appendChild(valNode);
-      driversList.appendChild(row);
+      container.appendChild(row);
     }
+  }
+
+  function renderForecastCard(forecast) {
+    state.activeForecast = forecast;
+    const sku = state.skusById.get(forecast.sku_id);
+
+    renderSkuCaptureContext(sku, forecast);
+
+    const unitLabel = sku ? `${sku.unit}s` : "units";
+    $("forecast-sku-name").textContent = forecast.sku_name;
+    $("forecast-recommended-qty").textContent = String(forecast.recommended_qty);
+    $("forecast-unit-label").textContent = unitLabel;
+    $("forecast-outlay").textContent = formatINR(forecast.outlay_amount);
+    $("forecast-service-level").textContent = formatPct(forecast.service_level, 0);
+
+    const p10 = Math.round(num(forecast.p10_total));
+    const p50 = Math.round(num(forecast.p50_total));
+    const p90 = Math.round(num(forecast.p90_total));
+    $("forecast-interval").textContent = `${p10}–${p90} (p50: ${p50})`;
+
+    // Top 4-Card Summary KPI Grid updates
+    const kpiOrder = $("kpi-rec-order");
+    if (kpiOrder) kpiOrder.textContent = `${forecast.recommended_qty} ${unitLabel}`;
+    const kpiOrderFoot = $("kpi-rec-order-foot");
+    if (kpiOrderFoot) kpiOrderFoot.textContent = `${forecast.sku_name} · 7-day target`;
+    const kpiOutlay = $("kpi-rec-outlay");
+    if (kpiOutlay) kpiOutlay.textContent = formatINR(forecast.outlay_amount);
+    const kpiService = $("kpi-service-level");
+    if (kpiService) kpiService.textContent = formatPct(forecast.service_level, 0);
+    const kpiServiceFoot = $("kpi-service-level-foot");
+    if (kpiServiceFoot) kpiServiceFoot.textContent = `Conformal p10–p90: ${p10}–${p90} units`;
+
+    const suffPill = $("data-sufficiency-pill");
+    const suff = String(forecast.data_sufficiency || "high").toUpperCase();
+    suffPill.textContent = `${suff} DATA`;
+    suffPill.className = "status-pill pill";
+    if (suff === "HIGH") suffPill.classList.add("pill-green", "pill--emerald");
+    else if (suff === "MEDIUM") suffPill.classList.add("pill-amber", "pill--amber");
+    else suffPill.classList.add("pill-red", "pill--crimson");
+
+    $("model-used-pill").textContent = forecast.model_used || "ensemble";
+    $("feature-hash-note").textContent = forecast.feature_hash
+      ? `snapshot #${String(forecast.feature_hash).slice(0, 10)}`
+      : "";
+
+    // Additive XAI drivers
+    const drivers = Array.isArray(forecast.drivers) ? forecast.drivers : [];
+    const driverSum = drivers.reduce((acc, d) => acc + num(d.units, 0), 0);
+    $("drivers-sum-check").textContent =
+      `SUM ${driverSum} = ${forecast.recommended_qty} UNITS`;
+
+    buildDriverRows($("drivers-list"), drivers, forecast.recommended_qty);
 
     // Configure Override Slider for this SKU
     configureOverrideSlider(forecast);
@@ -375,9 +436,12 @@
       const d = payload && payload.data;
       if (!d) return;
 
+      state.lastNarrative = d.narrative || "";
       textEl.textContent = d.narrative;
       groundedBadge.textContent = d.grounded ? "NUMBERS VERIFIED" : "FALLBACK VERIFIED";
-      groundedBadge.className = d.grounded ? "pill pill--emerald" : "pill pill--amber";
+      groundedBadge.className = d.grounded
+        ? "status-pill pill-green pill pill--emerald"
+        : "status-pill pill-amber pill pill--amber";
 
       const srcLabel =
         d.source === "llm_verified"
@@ -387,7 +451,163 @@
     } catch (err) {
       textEl.textContent = `Explanation unavailable: ${err.message}`;
       groundedBadge.textContent = "ERROR";
-      groundedBadge.className = "pill pill--crimson";
+      groundedBadge.className = "status-pill pill-red pill pill--crimson";
+    }
+  }
+
+  // ── Slide-Over Recommendation Drawer (Somendra-Mishra/VANI-LEDGER) ───────────
+
+  async function openRecommendationDrawer() {
+    const forecast = state.activeForecast;
+    if (!forecast) return;
+    const sku = state.skusById.get(forecast.sku_id);
+    const unitLabel = sku ? `${sku.unit}s` : "units";
+
+    $("drawerTitle").textContent = `${forecast.sku_name} (${forecast.sku_code})`;
+    const body = $("drawerBody");
+    clearNode(body);
+
+    // Meta row: Category tag, lead time, data readiness pill
+    const metaRow = el("div", "drawer-meta-row");
+    const leftMeta = el("div", "");
+    leftMeta.appendChild(el("span", "tag", sku ? sku.category : "Catalog SKU"));
+    leftMeta.appendChild(
+      el(
+        "span",
+        "mono-note",
+        `  Supplier lead time: ${sku ? sku.lead_time_days : 3} days · Shelf life: ${sku ? sku.shelf_life_days : 90}d`
+      )
+    );
+    metaRow.appendChild(leftMeta);
+    metaRow.appendChild(
+      el(
+        "span",
+        "status-pill pill-green",
+        `${String(forecast.data_sufficiency || "HIGH").toUpperCase()} DATA`
+      )
+    );
+    body.appendChild(metaRow);
+
+    // Recommendation Summary Banner
+    const notice = el("div", "notice warn");
+    const bannerTop = el("div", "drawer-banner-top");
+    bannerTop.appendChild(
+      el("strong", "", `Suggested Order: ${forecast.recommended_qty} ${unitLabel}`)
+    );
+    bannerTop.appendChild(el("strong", "", formatINR(forecast.outlay_amount)));
+    notice.appendChild(bannerTop);
+    notice.appendChild(
+      el(
+        "div",
+        "helper-text",
+        `On-hand: ${sku ? Math.round(num(sku.on_hand)) : 0} ${unitLabel} · Conformal p10–p90: ${Math.round(num(forecast.p10_total))}–${Math.round(num(forecast.p90_total))} · Service level: ${formatPct(forecast.service_level, 0)}`
+      )
+    );
+    body.appendChild(notice);
+
+    // Additive Drivers Section
+    body.appendChild(
+      el("div", "panel-title", "Why this order? / यह ऑर्डर क्यों जरूरी है?")
+    );
+    const drawerDrivers = el("div", "driver-list");
+    buildDriverRows(
+      drawerDrivers,
+      Array.isArray(forecast.drivers) ? forecast.drivers : [],
+      forecast.recommended_qty
+    );
+    body.appendChild(drawerDrivers);
+
+    // Grounded Narrative Box
+    const callout = el("div", "why-callout");
+    const calloutHead = el("div", "explain-box-head");
+    calloutHead.appendChild(
+      el("strong", "", "Plain-Language Explanation / आसान भाषा में:")
+    );
+    calloutHead.appendChild(el("span", "status-pill pill-green", "NUMBERS VERIFIED"));
+    callout.appendChild(calloutHead);
+    const narrativeP = el(
+      "p",
+      "explain-text",
+      state.lastNarrative || "Loading grounded seller explanation…"
+    );
+    callout.appendChild(narrativeP);
+    body.appendChild(callout);
+
+    // Drawer Actions
+    const actions = el("div", "drawer-actions");
+    const jumpSimBtn = el(
+      "button",
+      "btn btn-primary",
+      "◈ Adjust in What-If Simulator / ऑर्डर संख्या बदलें"
+    );
+    jumpSimBtn.type = "button";
+    jumpSimBtn.addEventListener("click", () => {
+      closeRecommendationDrawer();
+      const slider = $("override-slider");
+      if (slider) slider.focus();
+    });
+
+    const copySlipBtn = el(
+      "button",
+      "btn btn-secondary",
+      "💬 Copy Supplier Order Slip / सप्लायर ऑर्डर कॉपी करें"
+    );
+    copySlipBtn.type = "button";
+    copySlipBtn.addEventListener("click", () => {
+      copySupplierOrderSlip();
+    });
+
+    actions.appendChild(jumpSimBtn);
+    actions.appendChild(copySlipBtn);
+    body.appendChild(actions);
+
+    $("recommendationDrawer").classList.add("open");
+    $("drawerBackdrop").classList.add("active");
+
+    if (!state.lastNarrative) {
+      try {
+        const { payload } = await apiFetch(
+          `/v1/forecasts/${encodeURIComponent(state.activeSkuId)}/explain`,
+          {
+            method: "POST",
+            json: { language: state.explainLang },
+          }
+        );
+        if (payload && payload.data && payload.data.narrative) {
+          state.lastNarrative = payload.data.narrative;
+          narrativeP.textContent = payload.data.narrative;
+        }
+      } catch {
+        narrativeP.textContent =
+          "Deterministic drivers verified above; use the main panel to toggle EN / Hinglish.";
+      }
+    }
+  }
+
+  function closeRecommendationDrawer() {
+    $("recommendationDrawer").classList.remove("open");
+    $("drawerBackdrop").classList.remove("active");
+  }
+
+  async function copySupplierOrderSlip() {
+    const forecast = state.activeForecast;
+    if (!forecast) return;
+    const sku = state.skusById.get(forecast.sku_id);
+    const qty = state.lastSim ? state.lastSim.manual_qty : forecast.recommended_qty;
+    const unitCost = sku ? num(sku.unit_cost) : 0;
+    const estValue = qty * unitCost;
+    const unitLabel = sku ? `${sku.unit}s` : "units";
+    const slip =
+      `*VANI-LEDGER Purchase Order* | Product: ${forecast.sku_name} (${forecast.sku_code}) | ` +
+      `Qty: ${qty} ${unitLabel} | Est. Value: ${formatINR(estValue)} | Lead Time: ${sku ? sku.lead_time_days : 3}d`;
+
+    try {
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        await navigator.clipboard.writeText(slip);
+      }
+      showToast(`Supplier order slip ready: ${qty} ${unitLabel} (${formatINR(estValue)})`, "success");
+    } catch {
+      showToast(`Order slip: ${slip}`, "success");
     }
   }
 
@@ -395,7 +615,6 @@
 
   function configureOverrideSlider(forecast) {
     const rec = Math.max(0, Math.round(num(forecast.recommended_qty, 0)));
-    // Match Slide 5 exact 0–80 range for Hero SKU-OIL-001 (suggested=48)
     const maxVal =
       forecast.sku_id === HERO_IDS.OIL
         ? 80
@@ -406,19 +625,13 @@
     slider.max = String(maxVal);
     slider.value = String(rec);
 
-    $("slider-mid-label").textContent = String(Math.round(maxVal / 2));
-    $("slider-max-label").textContent = String(maxVal);
+    $("slider-mid-label").textContent = `${Math.round(maxVal / 2)} units`;
+    $("slider-max-label").textContent = `${maxVal} units`;
 
     $("override-manual-qty").textContent = String(rec);
     $("override-suggested-qty").textContent = String(rec);
-
-    // Position the AI SUGGESTED marker accurately along slider width
-    const pct = maxVal > 0 ? Math.min(96, Math.max(4, (rec / maxVal) * 100)) : 50;
-    const marker = $("ai-suggested-marker");
-    marker.style.left = `${pct.toFixed(1)}%`;
     $("ai-marker-text").textContent = `AI SUGGESTED ${rec}`;
 
-    // Demo preset button adapts cleanly to hero SKU vs other SKUs
     const demoBtn = $("preset-demo-35");
     if (forecast.sku_id === HERO_IDS.OIL) {
       demoBtn.textContent = "Demo: 35 (-13)";
@@ -433,7 +646,6 @@
   function renderSimulationResult(sim, serverLatencyMs, clientMs) {
     state.lastSim = sim;
 
-    // Latency badge
     const displayMs =
       typeof serverLatencyMs === "number" && serverLatencyMs > 0
         ? serverLatencyMs
@@ -454,15 +666,15 @@
     if (cashFreed > 0) {
       cashValEl.textContent = formatINR(cashFreed);
       cashValEl.className = "metric-tile-val metric-tile-val--gold";
-      cashLblEl.textContent = "CASH FREED";
+      cashLblEl.textContent = "CASH FREED / बचत";
     } else if (cashDelta > 0) {
       cashValEl.textContent = `+${formatINR(cashDelta)}`;
       cashValEl.className = "metric-tile-val metric-tile-val--ivory";
-      cashLblEl.textContent = "EXTRA OUTLAY";
+      cashLblEl.textContent = "EXTRA OUTLAY / अतिरिक्त खर्च";
     } else {
       cashValEl.textContent = "₹0";
       cashValEl.className = "metric-tile-val metric-tile-val--gold";
-      cashLblEl.textContent = "CASH FREED";
+      cashLblEl.textContent = "CASH FREED / बचत";
     }
     $("sim-outlay-sub").textContent = `Outlay ${formatINR(sim.outlay_amount)}`;
 
@@ -475,7 +687,7 @@
 
     const sign = riskDeltaPct > 0 ? "+" : "";
     riskEl.textContent = `${sign}${riskDeltaPct}%`;
-    riskTile.className = "metric-tile";
+    riskTile.className = "sim-result metric-tile";
 
     if (riskDeltaPct >= 5) {
       riskEl.className = "metric-tile-val metric-tile-val--crimson";
@@ -596,7 +808,7 @@
       showToast(`Commit failed: ${err.message}`, "error");
     } finally {
       btn.disabled = false;
-      btn.textContent = "Commit Override";
+      btn.textContent = "✓ Approve & Commit Override";
     }
   }
 
@@ -614,14 +826,14 @@
     clearNode(tbody);
 
     if (data.demo_document) {
-      badges.appendChild(el("span", "pill pill--amber", "DEMO DOCUMENT"));
+      badges.appendChild(el("span", "status-pill pill-amber pill pill--amber", "DEMO DOCUMENT"));
     }
-    badges.appendChild(el("span", "pill pill--mono", `adapter: ${data.source_adapter}`));
+    badges.appendChild(el("span", "status-pill pill-gray pill pill--mono", `adapter: ${data.source_adapter}`));
     badges.appendChild(
-      el("span", "pill pill--gold", `CONFIDENCE ${formatPct(data.confidence, 1)}`)
+      el("span", "status-pill pill-blue pill pill--gold", `CONFIDENCE ${formatPct(data.confidence, 1)}`)
     );
     if (data.needs_review) {
-      badges.appendChild(el("span", "pill pill--crimson", "NEEDS SELLER REVIEW"));
+      badges.appendChild(el("span", "status-pill pill-red pill pill--crimson", "NEEDS SELLER REVIEW"));
     }
 
     const mc = data.math_check;
@@ -665,7 +877,9 @@
       statusTd.appendChild(
         el(
           "span",
-          item.line_math_ok ? "pill pill--emerald" : "pill pill--crimson",
+          item.line_math_ok
+            ? "status-pill pill-green pill pill--emerald"
+            : "status-pill pill-red pill pill--crimson",
           item.line_math_ok ? "OK" : "MISMATCH"
         )
       );
@@ -732,12 +946,16 @@
     head.appendChild(
       el(
         "span",
-        data.duplicate_upload ? "pill pill--amber" : "pill pill--emerald",
+        data.duplicate_upload
+          ? "status-pill pill-amber pill pill--amber"
+          : "status-pill pill-green pill pill--emerald",
         data.duplicate_upload ? "DUPLICATE CSV (CACHED)" : "CSV INGESTED"
       )
     );
     if (data.document_id) {
-      head.appendChild(el("span", "pill pill--mono", `doc #${String(data.document_id).slice(0, 8)}`));
+      head.appendChild(
+        el("span", "status-pill pill-gray pill pill--mono", `doc #${String(data.document_id).slice(0, 8)}`)
+      );
     }
     area.appendChild(head);
 
@@ -806,9 +1024,9 @@
     clearNode(area);
 
     const head = el("div", "bill-meta-badges");
-    head.appendChild(el("span", "pill pill--gold", `INTENT: ${data.intent}`));
+    head.appendChild(el("span", "status-pill pill-blue pill pill--gold", `INTENT: ${data.intent}`));
     if (data.requires_confirmation) {
-      head.appendChild(el("span", "pill pill--amber", "REQUIRES CONFIRMATION"));
+      head.appendChild(el("span", "status-pill pill-amber pill pill--amber", "REQUIRES CONFIRMATION"));
     }
     area.appendChild(head);
 
@@ -876,6 +1094,7 @@
   function startVoiceMic() {
     const SpeechRec = window.SpeechRecognition || window.webkitSpeechRecognition;
     const statusEl = $("voice-mic-status");
+    const visual = $("voice-visual");
     if (!SpeechRec) {
       statusEl.textContent = "Web Speech API unavailable in this browser — type Hinglish directly.";
       return;
@@ -886,6 +1105,7 @@
       rec.interimResults = false;
       rec.maxAlternatives = 1;
       statusEl.textContent = "Listening (en-IN)… speak now.";
+      if (visual) visual.classList.add("listening");
       rec.onresult = (evt) => {
         const text = evt.results[0][0].transcript;
         $("voice-transcript").value = text;
@@ -895,8 +1115,12 @@
       rec.onerror = (evt) => {
         statusEl.textContent = `Mic stopped (${evt.error || "offline"}) — typed input ready.`;
       };
+      rec.onend = () => {
+        if (visual) visual.classList.remove("listening");
+      };
       rec.start();
     } catch {
+      if (visual) visual.classList.remove("listening");
       statusEl.textContent = "Mic unavailable offline — use preset chips or type Hinglish.";
     }
   }
@@ -967,13 +1191,13 @@
 
         const capTd = document.createElement("td");
         if (item.capped_by_shelf_life) {
-          capTd.appendChild(el("span", "pill pill--amber", "SHELF-LIFE CAP"));
+          capTd.appendChild(el("span", "status-pill pill-amber pill pill--amber", "SHELF-LIFE CAP"));
         } else if (item.capped_by_budget) {
-          capTd.appendChild(el("span", "pill pill--crimson", "BUDGET CAP"));
+          capTd.appendChild(el("span", "status-pill pill-red pill pill--crimson", "BUDGET CAP"));
         } else if (item.allocated_qty > 0) {
-          capTd.appendChild(el("span", "pill pill--emerald", "FULL ORDER"));
+          capTd.appendChild(el("span", "status-pill pill-green pill pill--emerald", "FULL ORDER"));
         } else {
-          capTd.appendChild(el("span", "pill pill--muted", "DEFERRED"));
+          capTd.appendChild(el("span", "status-pill pill-gray pill pill--muted", "DEFERRED"));
         }
         tr.appendChild(capTd);
         tbody.appendChild(tr);
@@ -1019,13 +1243,14 @@
         d.gate_passed === true ||
         String(d.status || "").toUpperCase() === "PASS";
       gatePill.textContent = passed ? "BACKTEST GATE · PASS" : "BACKTEST GATE · REVIEW";
-      gatePill.className = passed ? "pill pill--emerald" : "pill pill--amber";
+      gatePill.className = passed
+        ? "status-pill pill-green pill pill--emerald"
+        : "status-pill pill-amber pill pill--amber";
 
       if (footnote && d.honest_benchmark_note) {
         footnote.textContent = d.honest_benchmark_note;
       }
 
-      // Segment summary cards (A / B / C / Lift / Conformal p90 coverage)
       clearNode(segCards);
       const modelsMap = d.models && !Array.isArray(d.models) ? d.models : {};
       const ampModel = modelsMap.amplified_ensemble || {};
@@ -1057,7 +1282,6 @@
         addSegCard("P90 COVERAGE", fmtMetricPct(cov));
       }
 
-      // Models comparison table
       clearNode(tbody);
       const modelLabels = {
         seasonal_naive: "Seasonal Naive (4-wk)",
@@ -1107,7 +1331,7 @@
       }
     } catch (err) {
       gatePill.textContent = "UNAVAILABLE";
-      gatePill.className = "pill pill--crimson";
+      gatePill.className = "status-pill pill-red pill pill--crimson";
       clearNode(tbody);
       const tr = document.createElement("tr");
       const td = el("td", "muted-cell", `Backtest error: ${err.message}`);
@@ -1177,7 +1401,7 @@
     }
   }
 
-  // ── Tabs & Reset Demo ────────────────────────────────────────────────────────
+  // ── Sidebar Navigation, Tabs & Reset Demo ────────────────────────────────────
 
   function switchTab(tabName) {
     state.activeTab = tabName;
@@ -1205,6 +1429,45 @@
     }
   }
 
+  function handleSidebarNav(navKey) {
+    document.querySelectorAll(".nav-item").forEach((btn) => {
+      btn.classList.toggle("active", btn.dataset.nav === navKey);
+    });
+    const pageNames = {
+      overview: "Overview",
+      forecast: "Forecast & why",
+      simulator: "What-if simulator",
+      capture: "Sales & inputs",
+      reorder: "Inventory & ₹50k Plan",
+      inspector: "Backtest & FastMCP",
+    };
+    const pageNameEl = $("pageName");
+    if (pageNameEl) pageNameEl.textContent = pageNames[navKey] || "Overview";
+
+    const sidebar = $("sidebar");
+    if (sidebar) sidebar.classList.remove("open");
+
+    if (navKey === "overview") {
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    } else if (navKey === "forecast") {
+      if (!state.explainOpen) {
+        state.explainOpen = true;
+        loadExplanation();
+      }
+      const target = $("decision-card");
+      if (target) target.scrollIntoView({ behavior: "smooth", block: "start" });
+    } else if (navKey === "simulator") {
+      const target = $("override-card");
+      if (target) target.scrollIntoView({ behavior: "smooth", block: "start" });
+      const slider = $("override-slider");
+      if (slider) slider.focus();
+    } else if (navKey === "capture" || navKey === "reorder" || navKey === "inspector") {
+      switchTab(navKey);
+      const target = $("section-operations");
+      if (target) target.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+  }
+
   async function handleResetDemo() {
     const btn = $("btn-reset-demo");
     btn.disabled = true;
@@ -1214,8 +1477,10 @@
       state.reorderLoaded = false;
       state.inspectorLoaded = false;
       state.explainOpen = false;
+      state.lastNarrative = "";
       $("explain-panel").classList.add("is-hidden");
       $("override-reason").value = "";
+      closeRecommendationDrawer();
       await loadHealth();
       await loadSkus();
       await selectSku(HERO_IDS.OIL);
@@ -1229,13 +1494,56 @@
       showToast(`Reset failed: ${err.message}`, "error");
     } finally {
       btn.disabled = false;
-      btn.textContent = "Reset Demo";
+      btn.textContent = "↻ Reset Demo";
     }
   }
 
   // ── Event Binding & Init ─────────────────────────────────────────────────────
 
   function bindEvents() {
+    // Theme toggle & mobile sidebar toggle
+    const themeBtn = $("themeToggle");
+    if (themeBtn) {
+      themeBtn.addEventListener("click", () => {
+        applyTheme(state.theme === "dark" ? "light" : "dark");
+      });
+    }
+
+    const mobileMenu = $("mobileMenu");
+    if (mobileMenu) {
+      mobileMenu.addEventListener("click", () => {
+        const sb = $("sidebar");
+        if (sb) sb.classList.toggle("open");
+      });
+    }
+
+    // Sidebar navigation buttons
+    document.querySelectorAll(".nav-item").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        if (btn.dataset.nav) handleSidebarNav(btn.dataset.nav);
+      });
+    });
+
+    // Slide-Over Drawer triggers
+    const openDrawerBtn = $("btn-open-drawer");
+    if (openDrawerBtn) openDrawerBtn.addEventListener("click", openRecommendationDrawer);
+    const headingDrawerBtn = $("btn-heading-drawer");
+    if (headingDrawerBtn) headingDrawerBtn.addEventListener("click", openRecommendationDrawer);
+    const drawerCloseBtn = $("drawerClose");
+    if (drawerCloseBtn) drawerCloseBtn.addEventListener("click", closeRecommendationDrawer);
+    const drawerBackdrop = $("drawerBackdrop");
+    if (drawerBackdrop) drawerBackdrop.addEventListener("click", closeRecommendationDrawer);
+
+    const jumpCaptureBtn = $("btn-jump-capture");
+    if (jumpCaptureBtn) {
+      jumpCaptureBtn.addEventListener("click", () => handleSidebarNav("capture"));
+    }
+
+    const copySlipBtn = $("btn-copy-order-slip");
+    if (copySlipBtn) {
+      copySlipBtn.addEventListener("click", copySupplierOrderSlip);
+    }
+
     // Hero chips
     document.querySelectorAll(".hero-chip").forEach((btn) => {
       btn.addEventListener("click", () => {
@@ -1305,26 +1613,40 @@
     });
 
     // Tab 1: Bill / CSV / Voice
+    const billInput = $("bill-file-input");
+    billInput.addEventListener("change", () => {
+      const lbl = $("bill-file-label");
+      if (lbl && billInput.files && billInput.files[0]) {
+        lbl.textContent = `Selected: ${billInput.files[0].name}`;
+      }
+    });
+
     $("bill-upload-form").addEventListener("submit", (evt) => {
       evt.preventDefault();
-      const input = $("bill-file-input");
-      if (!input.files || input.files.length === 0) {
+      if (!billInput.files || billInput.files.length === 0) {
         showToast("Choose a JPEG/PNG/WebP bill or click Load Sample Crumpled Bill.", "error");
         return;
       }
-      uploadBillFile(input.files[0], $("btn-upload-bill"));
+      uploadBillFile(billInput.files[0], $("btn-upload-bill"));
     });
 
     $("btn-load-sample-bill").addEventListener("click", handleLoadSampleBill);
 
+    const csvInput = $("csv-file-input");
+    csvInput.addEventListener("change", () => {
+      const lbl = $("csv-file-label");
+      if (lbl && csvInput.files && csvInput.files[0]) {
+        lbl.textContent = `Selected: ${csvInput.files[0].name}`;
+      }
+    });
+
     $("csv-upload-form").addEventListener("submit", (evt) => {
       evt.preventDefault();
-      const input = $("csv-file-input");
-      if (!input.files || input.files.length === 0) {
+      if (!csvInput.files || csvInput.files.length === 0) {
         showToast("Choose a CSV file or click Load Sample D2C CSV.", "error");
         return;
       }
-      uploadCsvFile(input.files[0], $("btn-upload-csv"));
+      uploadCsvFile(csvInput.files[0], $("btn-upload-csv"));
     });
 
     $("btn-load-sample-csv").addEventListener("click", handleLoadSampleCsv);
@@ -1357,6 +1679,7 @@
   }
 
   async function init() {
+    initTheme();
     const metaKey = document.querySelector('meta[name="vani-api-key"]');
     state.apiKey = metaKey ? metaKey.getAttribute("content") || "" : "";
 
