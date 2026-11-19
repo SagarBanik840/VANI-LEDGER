@@ -23,7 +23,7 @@ from fastapi import (
     UploadFile,
     status,
 )
-from sqlalchemy import Engine
+from sqlalchemy import Engine, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, sessionmaker
 
@@ -68,7 +68,7 @@ from vani_ledger.schemas import (
 )
 from vani_ledger.services.narrative import generate_grounded_narrative
 from vani_ledger.storage.db import get_db
-from vani_ledger.storage.models import Merchant, Override
+from vani_ledger.storage.models import Forecast, Merchant, Override, Sale
 from vani_ledger.storage.repository import (
     get_latest_forecast,
     get_override_by_idempotency_key,
@@ -121,6 +121,28 @@ def _override_to_payload(row: Override) -> OverrideCommitPayload:
     )
 
 
+def _ensure_forecast_for_sku(db: Session, merchant_id: str, sku_id: str) -> Forecast | None:
+    """Return latest forecast for SKU, auto-running training if DB was seeded without training."""
+    forecast = get_latest_forecast(db, merchant_id, sku_id)
+    if forecast is not None:
+        return forecast
+
+    has_sales = db.scalar(select(Sale.id).where(Sale.merchant_id == merchant_id).limit(1))
+    if has_sales is None:
+        return None
+
+    if str(PROJECT_ROOT) not in sys.path:
+        sys.path.insert(0, str(PROJECT_ROOT))
+    from scripts.train import train_and_populate
+
+    bind = db.get_bind()
+    target_eng = bind if isinstance(bind, Engine) else None
+    train_and_populate(target_engine=target_eng, save_artifacts=False)
+    db.expire_all()
+    get_snapshot_cache().warm_from_db(db)
+    return get_latest_forecast(db, merchant_id, sku_id)
+
+
 # ── Forecasts & Grounded Explainability ────────────────────────────────────────
 
 
@@ -142,7 +164,7 @@ def get_forecast_for_sku(
     if sku is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="SKU not found")
 
-    forecast = get_latest_forecast(db, merchant.id, sku.id)
+    forecast = _ensure_forecast_for_sku(db, merchant.id, sku.id)
     if forecast is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -190,7 +212,7 @@ def explain_forecast_for_sku(
     if sku is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="SKU not found")
 
-    forecast = get_latest_forecast(db, merchant.id, sku.id)
+    forecast = _ensure_forecast_for_sku(db, merchant.id, sku.id)
     if forecast is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -246,7 +268,7 @@ def simulate_override_route(
         sku = get_sku_for_merchant(db, merchant.id, str(body.sku_id))
         if sku is None:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="SKU not found")
-        forecast = get_latest_forecast(db, merchant.id, sku.id)
+        forecast = _ensure_forecast_for_sku(db, merchant.id, sku.id)
         if forecast is None:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
@@ -332,7 +354,7 @@ def commit_override_route(
     if sku is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="SKU not found")
 
-    forecast = get_latest_forecast(db, merchant.id, sku.id)
+    forecast = _ensure_forecast_for_sku(db, merchant.id, sku.id)
     if forecast is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -441,6 +463,9 @@ def get_reorder_plan(
     )
     skus, _total = list_skus(db, merchant.id, limit=100, offset=0)
     forecasts_by_sku = list_latest_forecasts_for_merchant(db, merchant.id)
+    if not forecasts_by_sku and skus:
+        _ensure_forecast_for_sku(db, merchant.id, skus[0].id)
+        forecasts_by_sku = list_latest_forecasts_for_merchant(db, merchant.id)
     plan = compute_budget_reorder_plan(skus, forecasts_by_sku, budget)
     return ApiResponse[ReorderPlanPayload](
         data=plan,

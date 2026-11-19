@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import sys
 import time
 from collections.abc import AsyncIterator, Awaitable, Callable
 from contextlib import asynccontextmanager
@@ -18,11 +19,12 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from slowapi.errors import RateLimitExceeded
 from slowapi.middleware import SlowAPIMiddleware
+from sqlalchemy import Engine
 from sqlalchemy.orm import Session
 
 from vani_ledger.api.routes import router as v1_router
 from vani_ledger.api.security import limiter, require_merchant
-from vani_ledger.config import get_settings
+from vani_ledger.config import PROJECT_ROOT, get_settings
 from vani_ledger.forecast_core.simulator import get_snapshot_cache
 from vani_ledger.schemas import (
     ApiError,
@@ -59,10 +61,38 @@ def _elapsed_ms(request: Request) -> float:
 def _warm_cache_for_app(app: FastAPI) -> int:
     """Warm ForecastSnapshotCache using the active (possibly test-overridden) DB dependency."""
     cache = get_snapshot_cache()
+    is_test_override = get_db in app.dependency_overrides
     db_dep = app.dependency_overrides.get(get_db, get_db)
     db_gen = db_dep()
     try:
         db = next(db_gen)
+        if not is_test_override:
+            sku_count, sales_count = get_health_counts(db)
+            if sku_count == 0:
+                if str(PROJECT_ROOT) not in sys.path:
+                    sys.path.insert(0, str(PROJECT_ROOT))
+                from scripts.seed import seed_database
+                from scripts.train import train_and_populate
+
+                bind = db.get_bind()
+                target_eng = bind if isinstance(bind, Engine) else None
+                seed_database(target_engine=target_eng, reset=True)
+                train_and_populate(target_engine=target_eng, save_artifacts=False)
+                db.expire_all()
+            elif sales_count > 0:
+                count = cache.warm_from_db(db)
+                if count == 0:
+                    if str(PROJECT_ROOT) not in sys.path:
+                        sys.path.insert(0, str(PROJECT_ROOT))
+                    from scripts.train import train_and_populate
+
+                    bind = db.get_bind()
+                    target_eng = bind if isinstance(bind, Engine) else None
+                    train_and_populate(target_engine=target_eng, save_artifacts=False)
+                    db.expire_all()
+                    count = cache.warm_from_db(db)
+                logger.info("Warmed ForecastSnapshotCache with %d SKU snapshots", count)
+                return count
         count = cache.warm_from_db(db)
         logger.info("Warmed ForecastSnapshotCache with %d SKU snapshots", count)
         return count
