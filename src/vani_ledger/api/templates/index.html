@@ -1,0 +1,588 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="vani-api-key" content="{{ demo_api_key }}">
+  <title>VANI—LEDGER · Explainable Seller Decision Cockpit</title>
+  <link rel="stylesheet" href="/static/app.css">
+  <script src="/static/app.js" defer></script>
+</head>
+<body>
+  <div class="gold-top-rule" aria-hidden="true"></div>
+
+  <header class="topbar">
+    <div class="topbar-inner">
+      <div class="brand-block">
+        <div class="brand-mark">VANI<span class="brand-dash">—</span>LEDGER</div>
+        <div class="brand-sub">AARAMBHATHON 2026 / PS 01 · SMALL SELLER DEMAND COPILOT</div>
+      </div>
+
+      <div class="status-cluster">
+        <span class="status-pill status-pill--emerald" id="offline-pill">
+          <span class="live-dot" aria-hidden="true"></span>
+          <span id="offline-pill-text">OFFLINE READY</span>
+        </span>
+        <span class="status-pill status-pill--muted" id="model-version-pill">
+          {{ model_version }}
+        </span>
+        <span class="status-pill status-pill--muted" id="as-of-pill">
+          AS OF 2026-10-31 · IST
+        </span>
+        <button type="button" class="btn btn--ghost btn--sm" id="btn-reset-demo">
+          Reset Demo
+        </button>
+      </div>
+    </div>
+
+    <div class="selector-strip">
+      <div class="selector-inner">
+        <div class="hero-chips" role="group" aria-label="Quick Use-Case Hero SKUs">
+          <span class="micro-label">USE CASES</span>
+          <button
+            type="button"
+            class="hero-chip is-active"
+            data-sku-id="aaaaaaaa-aaaa-4aaa-8aaa-000000000001"
+            id="chip-case-01"
+          >
+            <span class="chip-num">01</span>
+            <span>Mustard Oil · Festival Surge</span>
+          </button>
+          <button
+            type="button"
+            class="hero-chip"
+            data-sku-id="aaaaaaaa-aaaa-4aaa-8aaa-000000000002"
+            id="chip-case-02"
+          >
+            <span class="chip-num">02</span>
+            <span>Fresh Milk · 3d Perishable</span>
+          </button>
+          <button
+            type="button"
+            class="hero-chip"
+            data-sku-id="aaaaaaaa-aaaa-4aaa-8aaa-000000000003"
+            id="chip-case-03"
+          >
+            <span class="chip-num">03</span>
+            <span>D2C Almond Oil · ₹50k Budget</span>
+          </button>
+        </div>
+
+        <div class="catalog-picker">
+          <label class="micro-label" for="sku-select">40-SKU CATALOG</label>
+          <select id="sku-select" class="select-input" aria-label="Select SKU from 40-SKU catalog">
+            <option value="aaaaaaaa-aaaa-4aaa-8aaa-000000000001">Loading 40 SKUs…</option>
+          </select>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <main class="shell">
+    <!-- ── Main 2-Column Decision Surface (Slide 5 Editorial Architecture) ── -->
+    <section class="decision-grid" aria-label="Seller Decision Surface">
+      <!-- LEFT COLUMN: 01 / CAPTURE + 02 / FORECAST -->
+      <article class="card card--decision" id="decision-card">
+        <div class="capture-strip">
+          <div class="capture-strip-head">
+            <span class="step-tag">01 / CAPTURE</span>
+            <span class="pill pill--gold" id="capture-verified-badge">Sarso Tel 1L · FastMCP Verified</span>
+            <span class="pill pill--muted" id="sku-abc-pill">SEGMENT A</span>
+            <span class="pill pill--amber is-hidden" id="sku-perishable-pill">PERISHABLE</span>
+          </div>
+          <div class="capture-strip-meta" id="capture-context-line">
+            Loading SKU metadata…
+          </div>
+        </div>
+
+        <div class="section-divider"></div>
+
+        <div class="forecast-section">
+          <div class="section-head">
+            <div class="section-head-left">
+              <span class="step-tag">02 / FORECAST</span>
+              <h1 class="sku-title" id="forecast-sku-name">Festive Mustard Oil 1L</h1>
+            </div>
+            <div class="section-head-badges">
+              <span class="pill pill--emerald" id="data-sufficiency-pill">HIGH DATA</span>
+              <span class="pill pill--mono" id="model-used-pill">lgbm_tweedie</span>
+            </div>
+          </div>
+
+          <div class="hero-metrics-row">
+            <div class="hero-qty-block">
+              <div class="hero-number-wrap">
+                <span class="hero-number" id="forecast-recommended-qty">—</span>
+                <span class="hero-unit" id="forecast-unit-label">units</span>
+              </div>
+              <div class="micro-label">RECOMMENDED 7-DAY ORDER</div>
+            </div>
+
+            <div class="kpi-stack">
+              <div class="kpi-mini">
+                <span class="kpi-mini-value" id="forecast-outlay">—</span>
+                <span class="micro-label">ESTIMATED OUTLAY</span>
+              </div>
+              <div class="kpi-mini">
+                <span class="kpi-mini-value kpi-mini-value--emerald" id="forecast-service-level">—</span>
+                <span class="micro-label">IN-STOCK SERVICE</span>
+              </div>
+              <div class="kpi-mini">
+                <span class="kpi-mini-value kpi-mini-value--ivory" id="forecast-interval">—</span>
+                <span class="micro-label">CONFORMAL P10–P90</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="drivers-panel">
+            <div class="drivers-head">
+              <span class="micro-label">EXPLAINABLE AI · ADDITIVE DRIVERS (SHAP + POLICY)</span>
+              <span class="mono-note" id="drivers-sum-check">SUM VERIFIED</span>
+            </div>
+            <div class="drivers-list" id="drivers-list">
+              <!-- Populated safely via DOM nodes in app.js -->
+            </div>
+          </div>
+
+          <div class="explain-controls">
+            <button type="button" class="btn btn--gold-outline" id="btn-why-order">
+              Why this order?
+            </button>
+            <div class="lang-toggle" role="group" aria-label="Explanation language">
+              <button type="button" class="lang-btn is-active" data-lang="en" id="lang-en">EN</button>
+              <button type="button" class="lang-btn" data-lang="hinglish" id="lang-hinglish">Hinglish</button>
+            </div>
+            <span class="mono-note" id="feature-hash-note"></span>
+          </div>
+
+          <div class="explain-box is-hidden" id="explain-panel" aria-live="polite">
+            <div class="explain-box-head">
+              <span class="micro-label">GROUNDED SELLER NARRATIVE</span>
+              <div class="explain-badges">
+                <span class="pill pill--emerald" id="explain-grounded-badge">NUMBERS VERIFIED</span>
+                <span class="pill pill--muted" id="explain-source-badge">DETERMINISTIC TEMPLATE</span>
+              </div>
+            </div>
+            <p class="explain-text" id="explain-narrative-text"></p>
+          </div>
+        </div>
+      </article>
+
+      <!-- RIGHT COLUMN: 03 / OVERRIDE WHAT-IF SANDBOX -->
+      <article class="card card--override" id="override-card">
+        <div class="section-head">
+          <div class="section-head-left">
+            <span class="step-tag">03 / OVERRIDE</span>
+            <h2 class="panel-title">What-If Cash &amp; Risk Sandbox</h2>
+          </div>
+          <span class="latency-pill" id="sim-latency-pill">— ms · &lt;50ms SLA</span>
+        </div>
+
+        <div class="override-qty-header">
+          <div>
+            <div class="micro-label">MANUAL ORDER QUANTITY</div>
+            <div class="override-qty-readout">
+              <span class="override-qty-big" id="override-manual-qty">—</span>
+              <span class="override-qty-slash">/</span>
+              <span class="override-qty-suggested" id="override-suggested-qty">—</span>
+              <span class="override-qty-label">AI suggested</span>
+            </div>
+          </div>
+          <div class="preset-row" id="override-presets">
+            <button type="button" class="btn btn--ghost btn--xs" id="preset-ai">AI Suggested</button>
+            <button type="button" class="btn btn--gold-outline btn--xs" id="preset-demo-35">Demo: 35</button>
+            <button type="button" class="btn btn--ghost btn--xs" id="preset-zero">0</button>
+          </div>
+        </div>
+
+        <div class="slider-stage">
+          <div class="slider-marker-track" aria-hidden="true">
+            <div class="ai-marker" id="ai-suggested-marker">
+              <span class="ai-marker-label" id="ai-marker-text">AI SUGGESTED 48</span>
+              <span class="ai-marker-stem"></span>
+            </div>
+          </div>
+          <input
+            type="range"
+            id="override-slider"
+            class="gold-slider"
+            min="0"
+            max="80"
+            step="1"
+            value="48"
+            aria-label="Manual order quantity override slider"
+          >
+          <div class="slider-bounds">
+            <span>0</span>
+            <span id="slider-mid-label">40</span>
+            <span id="slider-max-label">80</span>
+          </div>
+        </div>
+
+        <!-- 3 Big Slide 5 Metric Tiles -->
+        <div class="metric-tiles">
+          <div class="metric-tile" id="tile-cash">
+            <div class="metric-tile-val metric-tile-val--gold" id="sim-cash-val">₹0</div>
+            <div class="micro-label" id="sim-cash-label">CASH FREED</div>
+            <div class="metric-tile-sub" id="sim-outlay-sub">Outlay —</div>
+          </div>
+
+          <div class="metric-tile" id="tile-risk">
+            <div class="metric-tile-val" id="sim-risk-delta">0%</div>
+            <div class="micro-label">STOCKOUT RISK</div>
+            <div class="metric-tile-sub" id="sim-risk-sub">— → —</div>
+          </div>
+
+          <div class="metric-tile" id="tile-cover">
+            <div class="metric-tile-val metric-tile-val--ivory" id="sim-days-cover">— d</div>
+            <div class="micro-label">SHELF COVER</div>
+            <div class="metric-tile-sub" id="sim-cover-sub">Protection horizon</div>
+          </div>
+        </div>
+
+        <!-- Spoilage & Budget Guard Badges -->
+        <div class="guard-row">
+          <div class="guard-badge guard-badge--ok" id="guard-spoilage">
+            <span class="guard-dot" aria-hidden="true"></span>
+            <span id="guard-spoilage-text">SPOILAGE RISK 0% · SAFE</span>
+          </div>
+          <div class="guard-badge guard-badge--ok" id="guard-budget">
+            <span class="guard-dot" aria-hidden="true"></span>
+            <span id="guard-budget-text">BUDGET GUARD · WITHIN ₹50,000</span>
+          </div>
+        </div>
+
+        <div class="section-divider"></div>
+
+        <!-- Commit Override Form -->
+        <form class="commit-form" id="override-commit-form">
+          <label class="micro-label" for="override-reason">SELLER OVERRIDE REASON (AUDITED)</label>
+          <div class="commit-row">
+            <input
+              type="text"
+              id="override-reason"
+              class="text-input"
+              maxlength="280"
+              placeholder="e.g., Holding ₹1,950 cash reserve for Diwali dairy delivery"
+              autocomplete="off"
+            >
+            <button type="submit" class="btn btn--gold" id="btn-commit-override">
+              Commit Override
+            </button>
+          </div>
+          <div class="commit-status is-hidden" id="commit-status-banner" aria-live="polite"></div>
+        </form>
+      </article>
+    </section>
+
+    <!-- ── Bottom Interactive Deep-Dive Tabs ── -->
+    <section class="tabs-container" aria-label="Deep-Dive Operations">
+      <div class="tab-bar" role="tablist">
+        <button
+          type="button"
+          class="tab-btn is-active"
+          role="tab"
+          aria-selected="true"
+          aria-controls="panel-capture"
+          data-tab="capture"
+          id="tab-btn-capture"
+        >
+          <span class="tab-idx">01</span> Multimodal Capture (Bill / CSV / Voice)
+        </button>
+        <button
+          type="button"
+          class="tab-btn"
+          role="tab"
+          aria-selected="false"
+          aria-controls="panel-reorder"
+          data-tab="reorder"
+          id="tab-btn-reorder"
+        >
+          <span class="tab-idx">02</span> ₹50k Weekly Budget Reorder Plan (Case 03)
+        </button>
+        <button
+          type="button"
+          class="tab-btn"
+          role="tab"
+          aria-selected="false"
+          aria-controls="panel-inspector"
+          data-tab="inspector"
+          id="tab-btn-inspector"
+        >
+          <span class="tab-idx">03</span> ML Backtest &amp; FastMCP Inspector
+        </button>
+      </div>
+
+      <!-- TAB 1: MULTIMODAL CAPTURE -->
+      <div class="tab-panel" id="panel-capture" role="tabpanel" aria-labelledby="tab-btn-capture">
+        <div class="capture-grid">
+          <!-- Bill Scanner -->
+          <div class="card card--sub">
+            <div class="sub-head">
+              <div>
+                <div class="micro-label">WHOLESALE BILL AUDIT · PYTHON DECIMAL</div>
+                <h3 class="sub-title">Supplier Bill Capture</h3>
+              </div>
+              <button type="button" class="btn btn--gold-outline btn--sm" id="btn-load-sample-bill">
+                Load Sample Crumpled Bill
+              </button>
+            </div>
+
+            <form class="upload-form" id="bill-upload-form">
+              <input
+                type="file"
+                id="bill-file-input"
+                class="file-input"
+                accept="image/jpeg,image/png,image/webp"
+              >
+              <button type="submit" class="btn btn--gold btn--sm" id="btn-upload-bill">
+                Scan &amp; Verify Math
+              </button>
+            </form>
+
+            <div class="bill-result is-hidden" id="bill-result-area" aria-live="polite">
+              <div class="bill-meta-badges" id="bill-meta-badges"></div>
+              <div class="alert-banner is-hidden" id="bill-math-banner"></div>
+              <div class="table-wrap">
+                <table class="data-table" id="bill-items-table">
+                  <thead>
+                    <tr>
+                      <th>Line Item</th>
+                      <th class="num">Qty</th>
+                      <th class="num">Rate</th>
+                      <th class="num">Billed</th>
+                      <th class="num">Verified</th>
+                      <th>Audit</th>
+                    </tr>
+                  </thead>
+                  <tbody id="bill-items-tbody"></tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+
+          <!-- CSV Importer + Hinglish Voice -->
+          <div class="capture-side-stack">
+            <div class="card card--sub">
+              <div class="sub-head">
+                <div>
+                  <div class="micro-label">CASE 03 · MICRO-D2C LEDGER</div>
+                  <h3 class="sub-title">CSV Sales Import</h3>
+                </div>
+                <button type="button" class="btn btn--ghost btn--sm" id="btn-load-sample-csv">
+                  Load Sample D2C CSV
+                </button>
+              </div>
+              <form class="upload-form" id="csv-upload-form">
+                <input
+                  type="file"
+                  id="csv-file-input"
+                  class="file-input"
+                  accept=".csv,text/csv"
+                >
+                <button type="submit" class="btn btn--gold-outline btn--sm" id="btn-upload-csv">
+                  Import CSV
+                </button>
+              </form>
+              <div class="csv-result is-hidden" id="csv-result-area" aria-live="polite"></div>
+            </div>
+
+            <div class="card card--sub">
+              <div class="sub-head">
+                <div>
+                  <div class="micro-label">CASE 01 &amp; 02 · HINGLISH VOICE / NOTE</div>
+                  <h3 class="sub-title">Voice Note Intent Parser</h3>
+                </div>
+                <button type="button" class="btn btn--ghost btn--sm" id="btn-voice-mic">
+                  Mic (Web Speech)
+                </button>
+              </div>
+
+              <div class="voice-presets">
+                <button
+                  type="button"
+                  class="preset-chip"
+                  data-phrase="Diwali week stock add karo, shelf life 90d"
+                >
+                  "Diwali week stock add karo, shelf life 90d"
+                </button>
+                <button
+                  type="button"
+                  class="preset-chip"
+                  data-phrase="Aaj 12 crate doodh bika, 2 packet expire"
+                >
+                  "Aaj 12 crate doodh bika, 2 packet expire"
+                </button>
+                <button
+                  type="button"
+                  class="preset-chip"
+                  data-phrase="Badam tel 20 bottle order check karo"
+                >
+                  "Badam tel 20 bottle order check karo"
+                </button>
+              </div>
+
+              <form class="voice-form" id="voice-note-form">
+                <textarea
+                  id="voice-transcript"
+                  class="textarea-input"
+                  rows="2"
+                  maxlength="600"
+                  placeholder="Speak or type Hinglish / English note…"
+                >Aaj 12 crate doodh bika, 2 packet expire</textarea>
+                <div class="voice-actions">
+                  <span class="mono-note" id="voice-mic-status">Works offline with typed notes; browser mic optional.</span>
+                  <button type="submit" class="btn btn--gold-outline btn--sm" id="btn-parse-voice">
+                    Parse Intent
+                  </button>
+                </div>
+              </form>
+
+              <div class="voice-result is-hidden" id="voice-result-area" aria-live="polite"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- TAB 2: ₹50K WEEKLY BUDGET REORDER PLAN -->
+      <div class="tab-panel is-hidden" id="panel-reorder" role="tabpanel" aria-labelledby="tab-btn-reorder">
+        <div class="card card--sub">
+          <div class="reorder-toolbar">
+            <div>
+              <div class="micro-label">SCIPY LINPROG CAPITAL OPTIMIZER · MARGIN PER RUPEE &amp; URGENCY</div>
+              <h3 class="sub-title">Weekly Budget-Constrained Reorder Plan</h3>
+            </div>
+            <form class="budget-form" id="budget-plan-form">
+              <label class="micro-label" for="budget-input">WEEKLY BUDGET (₹)</label>
+              <input
+                type="number"
+                id="budget-input"
+                class="num-input"
+                value="50000"
+                min="0"
+                max="5000000"
+                step="1000"
+              >
+              <button type="submit" class="btn btn--gold btn--sm" id="btn-recalc-budget">
+                Optimize Plan
+              </button>
+              <button type="button" class="btn btn--ghost btn--xs" data-budget="25000">₹25k</button>
+              <button type="button" class="btn btn--ghost btn--xs" data-budget="50000">₹50k</button>
+              <button type="button" class="btn btn--ghost btn--xs" data-budget="80000">₹80k</button>
+            </form>
+          </div>
+
+          <div class="budget-summary-bar">
+            <div class="budget-stats">
+              <div class="budget-stat">
+                <span class="micro-label">ALLOCATED CAPITAL</span>
+                <span class="budget-stat-val budget-stat-val--gold" id="budget-allocated">—</span>
+              </div>
+              <div class="budget-stat">
+                <span class="micro-label">BUDGET REMAINING</span>
+                <span class="budget-stat-val budget-stat-val--emerald" id="budget-remaining">—</span>
+              </div>
+              <div class="budget-stat">
+                <span class="micro-label">UTILIZATION</span>
+                <span class="budget-stat-val" id="budget-pct">—</span>
+              </div>
+            </div>
+            <progress class="gold-progress" id="budget-progress" max="100" value="0"></progress>
+          </div>
+
+          <div class="table-wrap">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>SKU</th>
+                  <th>Category</th>
+                  <th class="num">Rec Qty</th>
+                  <th class="num">Allocated</th>
+                  <th class="num">Unit Cost</th>
+                  <th class="num">Total Cost</th>
+                  <th class="num">Margin / ₹</th>
+                  <th class="num">Urgency</th>
+                  <th>Constraints</th>
+                </tr>
+              </thead>
+              <tbody id="reorder-tbody">
+                <tr><td colspan="9" class="muted-cell">Loading budget-constrained reorder plan…</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- TAB 3: ML BACKTEST & FASTMCP INSPECTOR -->
+      <div class="tab-panel is-hidden" id="panel-inspector" role="tabpanel" aria-labelledby="tab-btn-inspector">
+        <div class="inspector-grid">
+          <!-- Backtest Panel -->
+          <div class="card card--sub">
+            <div class="sub-head">
+              <div>
+                <div class="micro-label">RULE 39 HONEST BENCHMARK · 3-FOLD WALK-FORWARD HOLDOUT</div>
+                <h3 class="sub-title">Real Held-Out ML Backtest</h3>
+              </div>
+              <span class="pill pill--emerald" id="backtest-gate-pill">CHECKING GATE…</span>
+            </div>
+
+            <div class="segment-cards" id="backtest-segment-cards"></div>
+
+            <div class="table-wrap">
+              <table class="data-table">
+                <thead>
+                  <tr>
+                    <th>Model / Stage</th>
+                    <th class="num">Rev WAPE</th>
+                    <th class="num">MASE</th>
+                    <th class="num">Pinball p50</th>
+                    <th class="num">Pinball p90</th>
+                    <th class="num">Bias</th>
+                  </tr>
+                </thead>
+                <tbody id="backtest-models-tbody">
+                  <tr><td colspan="6" class="muted-cell">Loading eval/latest_backtest.json…</td></tr>
+                </tbody>
+              </table>
+            </div>
+            <p class="honesty-footnote" id="backtest-footnote">
+              Measured strictly on chronological walk-forward holdout folds (zero future leakage, stockout censoring applied). Distinct from simulated deck projections.
+            </p>
+          </div>
+
+          <!-- FastMCP Inspector Panel -->
+          <div class="card card--sub">
+            <div class="sub-head">
+              <div>
+                <div class="micro-label">SLIDE 7 · ZERO LLM ARITHMETIC · SHARED DOMAIN CORE</div>
+                <h3 class="sub-title">FastMCP 4-Tool Plane</h3>
+              </div>
+              <button type="button" class="btn btn--ghost btn--xs" id="btn-refresh-mcp">
+                Refresh Telemetry
+              </button>
+            </div>
+
+            <div class="mcp-tools-list" id="mcp-tools-list"></div>
+
+            <div class="section-divider"></div>
+
+            <div class="micro-label">RECENT DETERMINISTIC INVOCATIONS</div>
+            <div class="mcp-calls-list" id="mcp-calls-list">
+              <div class="muted-cell">No invocations recorded yet.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="footer">
+    <div class="footer-inner">
+      <span>VANI—LEDGER · Perception Separated From Calculation · Pure Python Forecast Core (Zero LLM Imports)</span>
+      <span id="footer-health-meta">Local SQLite WAL · 100% Offline Capable</span>
+    </div>
+  </footer>
+
+  <div class="toast is-hidden" id="toast" role="status" aria-live="polite"></div>
+</body>
+</html>
