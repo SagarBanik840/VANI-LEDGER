@@ -1,0 +1,44 @@
+{
+  "demo_document": true,
+  "source_adapter": "demo_fixture",
+  "supplier_name": "Shree Ganesh Wholesale Traders",
+  "bill_number": "SGW-2026-1031",
+  "bill_date": "2026-10-31",
+  "confidence": 0.974,
+  "currency": "INR",
+  "line_items": [
+    {
+      "item_name": "Sarso Tel 1L",
+      "sku_code": "SKU-OIL-001",
+      "qty": "24",
+      "unit_price": "150.00",
+      "written_line_total": "3600.00"
+    },
+    {
+      "item_name": "Cheeni 1kg",
+      "sku_code": "SKU-STP-004",
+      "qty": "3",
+      "unit_price": "40.00",
+      "written_line_total": "120.00"
+    },
+    {
+      "item_name": "Chai Patti 250g",
+      "sku_code": "SKU-STP-006",
+      "qty": "1",
+      "unit_price": "105.00",
+      "written_line_total": "105.00"
+    },
+    {
+      "item_name": "Namak 1kg",
+      "sku_code": "SKU-STP-007",
+      "qty": "3",
+      "unit_price": "25.00",
+      "written_line_total": "75.00"
+    }
+  ],
+  "written_total": "4200.00",
+  "expected_computed_total": "3900.00",
+  "expected_delta": "300.00",
+  "expected_math_ok": false,
+  "notes": "DEMO DOCUMENT: Synthetic wholesale supplier bill with intentional Rs 300 grand-total overcharge (Rs 3,900 computed vs Rs 4,200 written) to verify deterministic Python Decimal math audit."
+}
