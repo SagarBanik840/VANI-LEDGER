@@ -21,6 +21,7 @@ Small Indian sellers (kirana stores, perishable dairy booths, micro-D2C merchant
 Read the single source of truth for the system design, ML design, verified local environment audit, security baseline, and 5-hour execution schedule:
 
 - **[`docs/ARCHITECTURE_AND_EXECUTION_PLAN.md`](docs/ARCHITECTURE_AND_EXECUTION_PLAN.md)** — Complete System Design, ML Design, ADRs, API/FastMCP Contracts & 5-Hour Build Plan
+- **[`docs/ML_STEP_BY_STEP_GUIDE.md`](docs/ML_STEP_BY_STEP_GUIDE.md)** — Beginner-to-Judge Walkthrough: Supervised ML, 5-Stage Amplification, SHAP XAI & API/SQL Sanitization
 - **[`AGENTS.md`](AGENTS.md)** — Canonical Engineering & Security Guardrails
 - **[`ppt/VANI_LEDGER.pptx`](ppt/VANI_LEDGER.pptx)** — Submitted 12-Slide Presentation Deck
 

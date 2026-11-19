@@ -389,48 +389,53 @@ This is the technical heart of VANI-LEDGER and directly answers PS 01 + Rule 39 
 | **SKU & Business Inputs (5)** | `sku_cat_code`, `category_code`, `unit_price`, `promo_flag`, `perishable`, `lead_time_days`, `shelf_life_days` | Static / known planned inputs |
 | **Demand Regime (2)** | `adi` (Average Demand Interval), `cv2` (Squared Coefficient of Variation) | Computed strictly on train/past window |
 
-### 4.4 Model Suite & Champion-Challenger Selection
-We train three complementary models and let **held-out validation WAPE** pick the champion per demand regime:
+### 4.4 Supervised Model Suite & 5-Stage Prediction Amplification Pipeline
+Because the system is built with AI assistance on a 12-core CPU with Python 3.12, we do **not** compromise on ML quality. We implement the full **5-stage prediction amplification pipeline** (every stage is measured on the holdout backtest and kept only if it improves WAPE):
 
-1. **Baseline 1 — Seasonal Naive:** Same weekday average over the last 4 uncensored weeks. (Fast benchmark to prove ML lift.)
-2. **Baseline 2 — Interpretable STL / Calendar Decomposition:**
-   - `base_daily` = median uncensored daily demand (28d) × weekday index
-   - `festival_uplift` = calibrated multiplicative curve over signed `days_to_festival`
-   - `trend` = clamped 28-day linear slope (`±10%` of base)
-   - Guaranteed fast, zero-failure, natively additive fallback.
-3. **ML Champion Candidate — Global LightGBM (Pooled Across All 40 SKUs):**
-   - **Mean/Count Model:** `objective="tweedie"`, `tweedie_variance_power=1.25` (the M5 Kaggle gold standard for non-negative & intermittent retail counts).
-   - **Quantile Models:** `objective="quantile"` at `alpha=0.50` (median) and `alpha=0.90` (upper tail).
-   - **Intermittent Routing (Syntetos-Boylan Matrix):**
-     - Smooth / Erratic (`ADI < 1.32`): Global LightGBM Tweedie + Quantile.
-     - Intermittent / Lumpy (`ADI ≥ 1.32`): Global Tweedie LightGBM vs Croston-SBA; pick validation winner.
-     - Cold-Start / New SKU (`< 14` days history): Category prior + explicit UI badge `"Low data confidence"`.
-4. **Selection Gate:** Serve Global LightGBM on a segment **only if** it beats Seasonal Naive by `≥ 5%` relative WAPE on the validation window; otherwise automatically fall back to STL/Seasonal Naive and log `"baseline_selected"`.
+#### Base Supervised & Statistical Models
+1. **Baseline 1 — Seasonal Naive:** Same-weekday mean over the last 4 uncensored weeks (benchmark to prove ML lift).
+2. **Baseline 2 — `statsmodels` Holt-Winters / ETS + STL Calendar Decomposition:** Captures smooth level, trend, weekday seasonality, and calibrated Indian festival lift curves. Guaranteed additive fallback.
+3. **Supervised ML Model — Global LightGBM (Pooled Across All 40 SKUs):**
+   - **Mean/Count Model:** `objective="tweedie"`, `tweedie_variance_power=1.25` (M5 retail competition gold standard for non-negative & intermittent sales counts).
+   - **Quantile Models:** Separate models with `objective="quantile"` at `alpha=0.50` (median) and `alpha=0.90` (upper tail).
+   - **Intermittent Demand Routing (Syntetos–Boylan Matrix):**
+     - Smooth / Erratic (`ADI < 1.32`): Global LightGBM + ETS ensemble.
+     - Intermittent / Lumpy (`ADI ≥ 1.32`): Tweedie LightGBM vs Croston-SBA; pick validation winner.
+     - Cold-Start / New SKU (`< 14` days history): Category prior + explicit `"Low data confidence"` badge.
 
-### 4.5 Conformal Prediction Intervals (Honest Uncertainty)
-Rather than assuming Gaussian errors (which break on skewed retail counts), we apply **Split Conformal Prediction** on the 4-week validation calibration set:
-- Compute non-conformity scores $r_i = y_i - \hat{y}_i^{(p50)}$ on validation windows aggregated to horizon $H$.
-- Store the empirical signed residual distribution $\{r_1, \dots, r_n\}$ per SKU/segment inside `forecasts.residuals_json`.
-- **Calibrated Interval:**
-  - $p_{10} = \max\left(0,\; \hat{y}_{p50} + Q_{0.10}(r)\right)$
-  - $p_{90} = \hat{y}_{p50} + Q_{0.90}(r)$
-- **Honest Confidence Display (Fixes "fake precision"):**
-  - Display **In-Stock Service Level** at recommended order `q*`: `P(D ≤ S*)` (e.g. **`91%`** for Festive Mustard Oil 1L) **alongside** the conformal interval (`"80% likely between X and Y units"`) and a `Data Sufficiency` pill (`High / Medium / Low`).
+#### 5-Stage Prediction Amplification (Measured Step-by-Step in `eval/backtest.py`)
+1. **Stage 1 — Inverse-WAPE Weighted Ensemble:** Combine `LightGBM + ETS/STL + Seasonal Naive` using validation-learned weights clamped to `[0.10, 0.80]`. If ML loses to baseline on a segment, serve the baseline automatically (champion–challenger gate).
+2. **Stage 2 — Per-Category Bias Correction:** Compute mean signed residual per category on the validation window and subtract it **only if** it strictly lowers validation WAPE (eliminates systematic over- or under-forecasting).
+3. **Stage 3 — Bottom-Up Hierarchical Reconciliation:** Aggregate SKU forecasts to category totals and reconcile proportionally against category-level forecasts so individual SKU numbers remain coherent with category demand (M5-style reconciliation).
+4. **Stage 4 — Split Conformal Prediction Intervals (Honest Uncertainty):**
+   - Compute empirical non-conformity residuals $r_i = y_i - \hat{y}_i^{(p50)}$ on the 4-week validation calibration set (aggregated over horizon $H$).
+   - Store empirical residuals $\{r_1, \dots, r_n\}$ in `forecasts.residuals_json`.
+   - Calibrated distribution-free intervals:
+     $$p_{10} = \max\left(0,\; \hat{y}_{p50} + Q_{0.10}(r)\right), \qquad p_{90} = \hat{y}_{p50} + Q_{0.90}(r)$$
+5. **Stage 5 — Human-in-the-Loop Feedback Learning:** Every **committed** seller override (never unaccepted drafts) is persisted with its delta and reason, enabling a bounded per-SKU bias adjustment in subsequent forecast cycles (`Capture → Forecast → Explain → Override → Commit → Learn`).
 
-### 4.6 Explainability (XAI): SHAP + Policy Driver Attribution
-Every recommended order quantity $q^*$ is decomposed into exact, seller-understandable unit drivers that **sum strictly to $q^*$**:
-1. **ML Feature Attribution (`shap.TreeExplainer`):** Computed on the LightGBM model over the 7-day forecast rows and grouped into business-meaningful buckets:
-   - **Base Weekly Velocity** (expected value + lag/rolling velocity features)
-   - **Festival & Calendar Uplift** (signed festival distance + payday + weekday seasonality)
-   - **Trend / Price / Promo Effect** (clamped residual directional features)
-2. **Policy Layer Attribution (Exact Inventory Math):**
-   - **Supplier Lead-Time Safety Buffer** = $S^* - \hat{D}_{\text{cycle}} - (\text{on\_hand} + \text{on\_order})$ (for `Festive Mustard Oil 1L`, 3-day supplier lead buffer = **`+8 units`**).
-3. **Largest-Remainder Rounding Reconciliation:** Unit contributions are rounded to integers via the Hamilton / largest-remainder method so `sum(drivers.units) == recommended_qty` **always holds** (never `24 + 16 + 8 = 49`!).
-4. **Grounded Plain-Language Narrative (`POST /v1/forecasts/{sku_id}/explain`):**
-   - **Primary (100% offline):** Deterministic structured template using the exact driver JSON.
-   - **Optional Enhancement:** If `GEMINI_API_KEY` is configured, pass **only** the structured JSON payload to Gemini Flash to rephrase into friendly Hinglish/English prose, then run **`verify_numeric_grounding(text, payload)`** — regex extracts every number in the response and checks it exists in the payload (`±0.1` tolerance). Any hallucinated number immediately rejects the LLM string and serves the verified template!
+### 4.5 Explainable AI (XAI) in the ML Output & Answer Amplification
+An unamplified forecast just prints `"48"`. VANI-LEDGER amplifies every ML prediction into a **glass-box, actionable decision object**:
 
-### 4.7 Deterministic Inventory Policy & `< 50 ms` Override Mathematics
+1. **SHAP Feature Attribution (`shap.TreeExplainer`):**
+   - Computed directly on the LightGBM model for the forecast horizon rows.
+   - Raw per-feature SHAP values are grouped into seller-understandable economic drivers:
+     - **Base Weekly Velocity** (model base value + lag/rolling velocity features)
+     - **Festival & Calendar Surge** (`days_to_festival`, `festival_pre_surge_weight`, `is_payday_window`, `dow`)
+     - **Trend / Price / Promo Shift** (clamped directional features)
+2. **Policy Layer Driver Attribution:**
+   - **Supplier Lead-Time Safety Buffer** = exact unit difference from lead-time coverage & conformal safety stock (`+8` units for `Festive Mustard Oil 1L` with `lead_time = 3d`).
+3. **Exact Additive Reconciliation (Largest-Remainder Method):**
+   - Integer unit contributions are reconciled so `sum(driver.units) == recommended_qty` **always holds** (`24 + 16 + 8 = 48`), alongside percentage share (`share_pct`), sign (`direction`), `model_version`, and `feature_snapshot_hash` for reproducibility.
+4. **Honest Confidence & Data Sufficiency (No Fake Precision):**
+   - Displays **In-Stock Service Level** at `q*`: `P(D ≤ S*)` (e.g., **`91%`**) **paired with** the conformal 80% interval (`p10–p90`) and a **Data Sufficiency** tier (`high / medium / low` based on history length & stockout rate).
+5. **Counterfactual Answer Amplification (Override Deltas):**
+   - Every manual quantity emits an instant before-vs-after counterfactual (`cash_freed`, `stockout_risk_before → after`, `days_cover`, `spoilage_risk`, `within_budget`) so the seller sees the financial consequence **before** committing.
+6. **Number-Verified Plain-Language Narrative (`POST /v1/forecasts/{sku_id}/explain`):**
+   - **Offline Default:** Deterministic template built directly from the verified JSON payload.
+   - **Optional LLM Polish:** If `GEMINI_API_KEY` is configured, Gemini Flash receives **only** the JSON payload to phrase 2 plain sentences (English or Hinglish). Then **`verify_numeric_grounding(text, payload)`** extracts every number via regex and checks it matches the payload within `±0.1`; any invented or altered number triggers instant fallback to the deterministic template and logs the rejection.
+
+### 4.6 Deterministic Inventory Policy & `< 50 ms` Override Mathematics
 All financial figures use Python `Decimal` (`ROUND_HALF_UP`).
 
 1. **Order-Up-To Policy (`forecast_core/policy.py`):**
@@ -457,7 +462,7 @@ All financial figures use Python `Decimal` (`ROUND_HALF_UP`).
    - **Budget Check:**
      $$\text{within\_budget} = (q_{\text{manual}} \times c_{\text{unit}}) \le B_{\text{sku\_cap}}$$
 
-### 4.8 Honest Evaluation Metrics & Gates (`eval/backtest.py --gate`)
+### 4.7 Honest Evaluation Metrics & Gates (`eval/backtest.py --gate`)
 Never report unweighted mean MAPE (sparse SKUs divide by near-zero and explode). Report all four metrics on the 3-fold walk-forward holdout:
 - **WAPE (Primary):** $\frac{\sum |y_i - \hat{y}_i|}{\sum y_i}$ — reported overall (revenue-weighted) and split by **A / B / C** segments.
 - **MASE:** Ratio of model MAE to in-sample seasonal-naive MAE (`< 1.0` beats naive).
@@ -475,18 +480,37 @@ Never report unweighted mean MAPE (sparse SKUs divide by near-zero and explode).
 
 ---
 
-## 5. Security & Production Reliability Checklist (Built Into Core)
+## 5. Endpoint API Sanitization, SQL Safety & Security Baseline (Built Into Core)
 
-1. **SQL Injection Prevention:** 100% SQLAlchemy 2.0 ORM / parameterized `text()` binds. Zero f-strings, `%`, or `+` in SQL. Dynamic sort keys allowlisted via dict.
-2. **Strict Schema Validation:** Every Pydantic v2 request model enforces `ConfigDict(extra="forbid", str_strip_whitespace=True)`, explicit bounds (`0 ≤ qty ≤ 100_000`), `max_length`, and NFKC Unicode normalization.
+1. **SQL Injection Prevention (Constant SQL Strings + Bound Parameters — NEVER Interpolated Variables):**
+   - **Golden Rule:** The SQL query text must ALWAYS be a static, constant string; user-supplied values are passed **separately** as bound parameters (or via SQLAlchemy 2.0 ORM expressions). Dynamic sort/filter column names are strictly mapped through a hardcoded Python allowlist dictionary.
+   ```python
+   # WRONG — SQL injection vulnerability (variable interpolated into SQL string)
+   session.execute(f"SELECT * FROM sales WHERE sku_id = '{sku_id}'")
+   session.execute("SELECT * FROM sales WHERE sku_id = '%s'" % sku_id)
+
+   # RIGHT — SQLAlchemy 2.0 ORM (auto-parameterized + mandatory tenant scope)
+   stmt = select(Sale).where(Sale.sku_id == sku_id, Sale.merchant_id == merchant_id)
+
+   # RIGHT — Constant raw SQL string with separate bound parameters
+   session.execute(
+       text("SELECT * FROM sales WHERE sku_id = :sku_id AND merchant_id = :mid"),
+       {"sku_id": sku_id, "mid": merchant_id},
+   )
+
+   # RIGHT — Dynamic sorting via strict allowlist (never interpolate column names)
+   SORTABLE = {"date": Sale.sold_date, "qty": Sale.qty}
+   col = SORTABLE.get(sort_by, Sale.sold_date)
+   ```
+2. **Strict Input Sanitization (Pydantic v2):** Every request schema enforces `ConfigDict(extra="forbid", str_strip_whitespace=True)`, explicit numeric bounds (`0 ≤ qty ≤ 100_000`), `max_length` on strings, typed `UUID`/`date`/`Decimal`, null-byte/control-character rejection, and Unicode **NFKC** normalization. JSON body capped at `1 MB`; pagination capped at `limit ≤ 100`.
 3. **Authentication & Tenant Isolation:** `X-API-Key` verified via constant-time `hmac.compare_digest` against SHA-256 hash; `merchant_id` comes strictly from auth context, never the request body. Cross-tenant SKU lookups return `404` (no existence leak).
 4. **Upload Sanitization (`POST /v1/capture/bill`):**
    - Reject files `> 10 MB` (`413`).
    - Verify **both** `Content-Type` allowlist (`image/jpeg`, `image/png`, `image/webp`) **and** binary magic bytes (`\xff\xd8\xff`, `\x89PNG`, `RIFF...WEBP`).
-   - Open with Pillow, call `verify()`, enforce `width * height ≤ 36,000,000` (decompression-bomb guard), convert to RGB & re-encode to strip EXIF/polyglot payloads, store under random UUID outside static root.
+   - Open with Pillow, call `verify()`, enforce `width * height ≤ 36,000,000` (decompression-bomb guard), convert to RGB & re-encode to strip EXIF/polyglot payloads, store under random UUID outside static root (never trust client filename — blocks `../../etc/passwd` path traversal).
 5. **Prompt Injection Defense:** OCR/Hinglish text is wrapped in `<document>...</document>` data tags, never concatenated into system instructions; outputs must pass strict Pydantic schema + Python `Decimal` arithmetic verification + human confirmation before DB commit.
 6. **Rate Limiting & Headers:** `slowapi` per-identity/IP limits returning `429` + `Retry-After` + `X-RateLimit-*`. HTTP middleware sets `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`, `Referrer-Policy: no-referrer`, and strict local `Content-Security-Policy`.
-7. **Automated Security Tests (`tests/security/test_security.py`):** Tests SQLi payloads (`' OR 1=1 --`), mass assignment (`merchant_id` in body → `422`), IDOR (`404`), missing API key (`401`), fake `.jpg` containing ZIP bytes (`422`), `>10 MB` payload (`413`), prompt-injection numeric grounding rejection, and `429` rate-limit threshold.
+7. **Automated Security Tests (`tests/security/test_security.py`):** Tests SQLi payloads (`' OR 1=1 --`, `"; DROP TABLE sales; --`), XSS sanitization, path-traversal filename rejection, mass assignment (`merchant_id` in body → `422`), IDOR (`404`), missing API key (`401`), fake `.jpg` containing ZIP bytes (`422`), `>10 MB` payload (`413`), prompt-injection numeric grounding rejection, and `429` rate-limit threshold.
 
 ---
 
@@ -586,10 +610,15 @@ Strict time-boxes with **hard exit tests**. If a block runs >10 min late, immedi
 
 ---
 
-## 8. Post-Hackathon Production Evolution (Zero-Rewrite Path)
-When moving beyond the hackathon into production:
-1. Swap `DATABASE_URL` from SQLite WAL to **PostgreSQL 17 + `pgvector`** (enable Alembic migrations & `mcp_ro` read-only DB role).
-2. Point `slowapi` `storage_uri` to **Redis** and upgrade static API keys to short-lived JWTs + RBAC.
-3. Plug **Docling + Qwen2.5-VL / Gemini 2.5 Flash** and **faster-whisper** into the existing `BillExtractor` and `VoiceParser` adapter interfaces.
-4. Port the Jinja2 UI to **Next.js 16 PWA** against the already-frozen `/v1/*` OpenAPI specification.
-5. Deploy via Docker Compose behind **Caddy** with automatic TLS, OpenTelemetry tracing, and nightly scheduled retraining.
+## 8. If Selected for Round 2 / Finals (Additional Time Upgrade Roadmap)
+
+Per `Event/Rule_Book.pdf` (Rules 19–30), qualified teams refine and strengthen their approved prototype for Round II & Final evaluation. Because Tonight's 5-hour architecture uses strict interfaces (Repository Pattern, Capture Adapter Protocol, Frozen `/v1/*` OpenAPI + FastMCP Contracts, isolated `forecast_core`), **every upgrade below plugs in cleanly with zero rewrite of the math or API contracts**:
+
+| Priority | Upgrade (Round 2 / Finals) | What Changes (Zero Rewrite) | Judge Impact |
+|---|---|---|---|
+| **1. Public Retail Dataset Validation** | Download **Kaggle Store Item Demand** (5 yrs, 50 items) & **UCI Online Retail II** and run the exact same `eval/backtest.py --gate` | Add 1 data loader script under `scripts/load_public_datasets.py` | Proves ML generalizes on real public benchmarks beyond synthetic kirana data |
+| **2. Database & Hybrid SKU Search** | Upgrade SQLite → **PostgreSQL 17 + `pgvector` + BM25** with Alembic migrations & read-only `mcp_ro` DB role | Swap `DATABASE_URL` env var + add pgvector hybrid resolver for fuzzy Hinglish names (`"Sarso Tel"` → `Festive Mustard Oil 1L`) | Matches Slide 7 Layer 4 word-for-word at production scale |
+| **3. Distributed Limits, Cache & Auth** | Upgrade in-memory `slowapi`/cache → **Redis**, upgrade `X-API-Key` → **Short-lived JWT (15m) + RBAC** | Change `slowapi` `storage_uri` to `redis://...` & swap FastAPI auth dependency | Production multi-worker scaling + `k6` load test verification |
+| **4. Full Multimodal Vision & Voice** | Plug **Docling + Gemini 2.5 Flash / Qwen2.5-VL (Ollama)** into `BillExtractor`, and **faster-whisper + Kokoro TTS + LiveKit WebRTC** into `VoiceParser` + score 20-bill extraction F1 | Implement 2 adapter classes behind existing `BillExtractor` & `VoiceParser` interfaces | Full hands-free Hinglish voice loop + real handwritten bill parsing + offline Ollama failover |
+| **5. Next.js 16 PWA + React Flow** | Port the Editorial Cockpit UI to **Next.js 16 + Tailwind v4 + React Flow** live driver graph + offline Service Worker | Consume the already-frozen `/v1/*` OpenAPI schema + add Playwright E2E tests | Interactive node-graph observability & installable mobile PWA |
+| **6. Production Container Stack** | Add hardened `docker-compose.yml` (`web`, `api`, `mcp`, `worker`, `postgres`, `redis`, `caddy` TLS) | Wrap existing entrypoints in non-root containers | One-command reproducible cloud or on-prem deployment |
