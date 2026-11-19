@@ -1,0 +1,64 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "vani-ledger"
+version = "0.1.0"
+description = "Explainable demand forecasting and multimodal inventory copilot for small sellers (AARAMBHATHON 2.0 PS 01)"
+readme = "README.md"
+requires-python = ">=3.12,<3.13"
+dependencies = [
+    "fastapi>=0.115.0,<1.0.0",
+    "uvicorn[standard]>=0.32.0,<1.0.0",
+    "pydantic>=2.9.0,<3.0.0",
+    "pydantic-settings>=2.6.0,<3.0.0",
+    "sqlalchemy>=2.0.36,<3.0.0",
+    "jinja2>=3.1.4,<4.0.0",
+    "python-multipart>=0.0.12,<1.0.0",
+    "slowapi>=0.1.9,<1.0.0",
+    "pillow>=11.0.0,<12.0.0",
+    "pyyaml>=6.0.2,<7.0.0",
+    "fastmcp>=2.2.0,<4.0.0",
+    "numpy>=2.0.0,<3.0.0",
+    "pandas>=2.2.3,<3.0.0",
+    "scipy>=1.14.0,<2.0.0",
+    "statsmodels>=0.14.4,<1.0.0",
+    "lightgbm>=4.5.0,<5.0.0",
+    "shap>=0.46.0,<1.0.0",
+    "scikit-learn>=1.5.2,<2.0.0",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.3.0,<9.0.0",
+    "httpx>=0.27.2,<1.0.0",
+    "ruff>=0.8.0,<1.0.0",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/vani_ledger"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src", "."]
+addopts = "-v"
+
+[tool.ruff]
+target-version = "py312"
+line-length = 100
+src = ["src", "scripts", "eval", "tests"]
+extend-exclude = [".agents", "implementation"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP", "S"]
+ignore = [
+    "S101",  # assert used in tests
+    "S104",  # binding to 0.0.0.0 if needed
+    "B008",  # FastAPI Depends() in function defaults
+    "UP046",  # keep Generic[T] syntax for Pydantic compatibility
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["S101", "S105", "S106"]
+"scripts/**" = ["S311"]

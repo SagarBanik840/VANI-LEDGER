@@ -1,0 +1,107 @@
+# Canonical deterministic configuration for VANI-LEDGER (AARAMBHATHON 2.0 PS 01)
+seed: 42
+history_days: 730
+# Right before Diwali 2026 (Nov 8, 2026 -> 8 days ahead, peak pre-festival wholesale stocking window)
+as_of_date: "2026-10-31"
+default_horizon_days: 7
+
+merchant:
+  id: "11111111-1111-4111-8111-111111111111"
+  name: "Sharma Kirana & D2C Mart"
+  weekly_budget: "50000.00"
+  timezone: "Asia/Kolkata"
+
+secondary_merchant:
+  id: "22222222-2222-4222-8222-222222222222"
+  name: "Verma General Store"
+  weekly_budget: "35000.00"
+  timezone: "Asia/Kolkata"
+
+stockout_rate: 0.03
+
+# Indian festival calendar across 2024-2026 (dates approximate major northern/pan-India retail peaks)
+festivals:
+  - { name: "Diwali", date: "2024-11-01", peak_uplift: 0.65, pre_days: 12, post_days: 2 }
+  - { name: "Christmas", date: "2024-12-25", peak_uplift: 0.25, pre_days: 7, post_days: 2 }
+  - { name: "Pongal / Makar Sankranti", date: "2025-01-14", peak_uplift: 0.35, pre_days: 7, post_days: 2 }
+  - { name: "Holi", date: "2025-03-14", peak_uplift: 0.50, pre_days: 9, post_days: 2 }
+  - { name: "Eid-ul-Fitr", date: "2025-03-31", peak_uplift: 0.45, pre_days: 8, post_days: 2 }
+  - { name: "Raksha Bandhan", date: "2025-08-09", peak_uplift: 0.40, pre_days: 7, post_days: 1 }
+  - { name: "Navratri", date: "2025-09-22", peak_uplift: 0.45, pre_days: 8, post_days: 4 }
+  - { name: "Diwali", date: "2025-10-20", peak_uplift: 0.68, pre_days: 12, post_days: 2 }
+  - { name: "Christmas", date: "2025-12-25", peak_uplift: 0.25, pre_days: 7, post_days: 2 }
+  - { name: "Pongal / Makar Sankranti", date: "2026-01-14", peak_uplift: 0.35, pre_days: 7, post_days: 2 }
+  - { name: "Holi", date: "2026-03-04", peak_uplift: 0.50, pre_days: 9, post_days: 2 }
+  - { name: "Eid-ul-Fitr", date: "2026-03-21", peak_uplift: 0.45, pre_days: 8, post_days: 2 }
+  - { name: "Raksha Bandhan", date: "2026-08-28", peak_uplift: 0.40, pre_days: 7, post_days: 1 }
+  - { name: "Navratri", date: "2026-10-11", peak_uplift: 0.45, pre_days: 8, post_days: 4 }
+  - { name: "Diwali", date: "2026-11-08", peak_uplift: 0.68, pre_days: 12, post_days: 2 }
+  - { name: "Christmas", date: "2026-12-25", peak_uplift: 0.25, pre_days: 7, post_days: 2 }
+
+# Three Hero SKUs aligned with ppt/VANI_LEDGER.pptx Slides 5 & 6
+hero_skus:
+  - id: "aaaaaaaa-aaaa-4aaa-8aaa-000000000001"
+    sku_code: "SKU-OIL-001"
+    name: "Festive Mustard Oil 1L"
+    hinglish_alias: "Sarso Tel 1L"
+    category: "Cooking Oil"
+    unit: "bottle"
+    unit_cost: "150.00"
+    unit_price: "220.00"
+    salvage_value: "120.00"
+    lead_time_days: 3
+    shelf_life_days: 90
+    moq: 1
+    pack_size: 1
+    perishable: false
+    on_hand: "10.000"
+    on_order: "0.000"
+    abc_segment: "A"
+    base_daily_mean: 3.43
+    festival_sensitivity: 1.00
+    noise_cv: 0.14
+    use_case: "Case 01 · Kirana & Festival Surge"
+
+  - id: "aaaaaaaa-aaaa-4aaa-8aaa-000000000002"
+    sku_code: "SKU-DAIRY-001"
+    name: "Fresh Full-Cream Milk 1L"
+    hinglish_alias: "Taza Doodh 1L"
+    category: "Dairy & Bakery"
+    unit: "pack"
+    unit_cost: "54.00"
+    unit_price: "66.00"
+    salvage_value: "10.00"
+    lead_time_days: 1
+    shelf_life_days: 3
+    moq: 1
+    pack_size: 1
+    perishable: true
+    on_hand: "6.000"
+    on_order: "0.000"
+    abc_segment: "A"
+    base_daily_mean: 16.0
+    festival_sensitivity: 0.35
+    noise_cv: 0.12
+    use_case: "Case 02 · Perishable & Dairy Retail"
+
+  - id: "aaaaaaaa-aaaa-4aaa-8aaa-000000000003"
+    sku_code: "SKU-D2C-001"
+    name: "Cold-Pressed Almond Hair Oil 200ml"
+    hinglish_alias: "Badam Tel 200ml"
+    category: "Micro-D2C"
+    unit: "bottle"
+    unit_cost: "180.00"
+    unit_price: "399.00"
+    salvage_value: "90.00"
+    lead_time_days: 5
+    shelf_life_days: 180
+    moq: 10
+    pack_size: 5
+    perishable: false
+    on_hand: "14.000"
+    on_order: "0.000"
+    abc_segment: "A"
+    base_daily_mean: 5.5
+    festival_sensitivity: 0.80
+    noise_cv: 0.16
+    use_case: "Case 03 · Micro-D2C / Online Seller"
