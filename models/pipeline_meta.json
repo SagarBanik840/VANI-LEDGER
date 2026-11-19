@@ -1,0 +1,76 @@
+{
+  "model_version": "lgbm-conformal-v1.0",
+  "feature_columns": [
+    "lag_1",
+    "lag_7",
+    "lag_14",
+    "lag_28",
+    "roll_mean_7",
+    "roll_mean_14",
+    "roll_mean_28",
+    "base_roll_mean_90",
+    "roll_std_14",
+    "roll_std_28",
+    "roll_max_14",
+    "roll_zero_rate_28",
+    "ewm_mean_14",
+    "causal_dow_ratio",
+    "past_fest_sens",
+    "festival_demand_signal",
+    "dow",
+    "dow_sin",
+    "dow_cos",
+    "month",
+    "is_weekend",
+    "is_payday_window",
+    "is_festival_window",
+    "days_to_festival",
+    "festival_pre_surge_weight",
+    "time_trend_idx",
+    "sku_cat_code",
+    "category_code",
+    "unit_price",
+    "promo_flag",
+    "perishable",
+    "lead_time_days",
+    "shelf_life_days",
+    "adi",
+    "cv2"
+  ],
+  "categorical_features": [
+    "sku_cat_code",
+    "category_code"
+  ],
+  "segment_weights": {
+    "A": {
+      "lgbm": 0.1,
+      "stl": 0.8,
+      "naive": 0.1
+    },
+    "B": {
+      "lgbm": 0.8,
+      "stl": 0.1,
+      "naive": 0.1
+    },
+    "C": {
+      "lgbm": 0.1,
+      "stl": 0.8,
+      "naive": 0.1
+    }
+  },
+  "segment_champions": {
+    "A": "amplified_ensemble",
+    "B": "amplified_ensemble",
+    "C": "amplified_ensemble"
+  },
+  "intermittent_winner": "lgbm_tweedie",
+  "category_bias_factors": {
+    "Cooking Oil": 1.04,
+    "Dairy & Bakery": 1.0,
+    "Micro-D2C": 1.0,
+    "Snacks": 1.0,
+    "Staples": 1.0
+  },
+  "reconciliation_alpha": 1.0,
+  "val_residual_count": 120
+}

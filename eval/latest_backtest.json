@@ -1,0 +1,208 @@
+{
+  "model_version": "lgbm-conformal-v1.0",
+  "evaluated_at": "2026-11-19T16:13:23.337280+00:00",
+  "runtime_seconds": 23.54,
+  "honest_benchmark_note": "Real 3-fold non-overlapping chronological walk-forward holdout backtest across 40 seeded Indian retail SKUs (Rule 39 compliant; train <= 2026-01-15, 28d conformal validation 2026-01-16..2026-02-12, 3 unseen 2026 festival holdout folds; zero random shuffle, zero leakage, zero hero calibration applied during backtest).",
+  "splits": {
+    "train_end_date": "2026-01-15",
+    "val_end_date": "2026-02-12",
+    "horizon_days": 14,
+    "holdout_origins": [
+      "2026-02-23",
+      "2026-08-19",
+      "2026-10-03"
+    ],
+    "n_holdout_sku_windows": 120
+  },
+  "pipeline_config": {
+    "segment_weights": {
+      "A": {
+        "lgbm": 0.1,
+        "stl": 0.8,
+        "naive": 0.1
+      },
+      "B": {
+        "lgbm": 0.8,
+        "stl": 0.1,
+        "naive": 0.1
+      },
+      "C": {
+        "lgbm": 0.3528,
+        "stl": 0.3304,
+        "naive": 0.3168
+      }
+    },
+    "segment_champions": {
+      "A": "amplified_ensemble",
+      "B": "amplified_ensemble",
+      "C": "amplified_ensemble"
+    },
+    "intermittent_winner": "lgbm_tweedie",
+    "category_bias_factors": {
+      "Cooking Oil": 1.0,
+      "Dairy & Bakery": 1.0,
+      "Micro-D2C": 1.0,
+      "Snacks": 1.0,
+      "Staples": 1.0
+    },
+    "reconciliation_alpha": 1.0
+  },
+  "models": {
+    "seasonal_naive": {
+      "revenue_weighted_wape": 0.1695,
+      "unit_wape": 0.1494,
+      "segment_wape": {
+        "A": 0.1474,
+        "B": 0.1753,
+        "C": 0.4185
+      },
+      "segment_mase": {
+        "A": 0.9379,
+        "B": 0.8955,
+        "C": 1.0259
+      },
+      "mase": 0.9418,
+      "pinball_p50": 5.6625,
+      "pinball_p90": 2.0849,
+      "bias": -0.1161,
+      "p90_empirical_coverage": 0.7833
+    },
+    "stl_calendar": {
+      "revenue_weighted_wape": 0.1269,
+      "unit_wape": 0.1057,
+      "segment_wape": {
+        "A": 0.1048,
+        "B": 0.1331,
+        "C": 0.3758
+      },
+      "segment_mase": {
+        "A": 0.8279,
+        "B": 0.819,
+        "C": 1.0067
+      },
+      "mase": 0.8648,
+      "pinball_p50": 4.0046,
+      "pinball_p90": 2.0261,
+      "bias": -0.0316,
+      "p90_empirical_coverage": 0.9
+    },
+    "lgbm_tweedie": {
+      "revenue_weighted_wape": 0.126,
+      "unit_wape": 0.0965,
+      "segment_wape": {
+        "A": 0.1024,
+        "B": 0.1358,
+        "C": 0.3708
+      },
+      "segment_mase": {
+        "A": 0.8056,
+        "B": 0.8104,
+        "C": 1.0264
+      },
+      "mase": 0.8571,
+      "pinball_p50": 3.6564,
+      "pinball_p90": 3.8925,
+      "bias": 0.0237,
+      "p90_empirical_coverage": 1.0
+    },
+    "amplified_ensemble": {
+      "revenue_weighted_wape": 0.1231,
+      "unit_wape": 0.0985,
+      "segment_wape": {
+        "A": 0.1019,
+        "B": 0.127,
+        "C": 0.3744
+      },
+      "segment_mase": {
+        "A": 0.8014,
+        "B": 0.8058,
+        "C": 0.9692
+      },
+      "mase": 0.8408,
+      "pinball_p50": 3.7312,
+      "pinball_p90": 2.0276,
+      "bias": -0.0154,
+      "p90_empirical_coverage": 0.9167
+    }
+  },
+  "stage_progression": {
+    "baseline_seasonal_naive_wape": 0.1695,
+    "baseline_stl_calendar_wape": 0.1269,
+    "supervised_lgbm_wape": 0.126,
+    "stage1_inverse_wape_ensemble_wape": 0.1231,
+    "stage2_category_bias_corrected_wape": 0.1231,
+    "stage3_reconciled_amplified_wape": 0.1231
+  },
+  "lift_over_seasonal_naive_pct": 27.37,
+  "folds": [
+    {
+      "fold": 1,
+      "label": "Holi 2026 Pre-Surge",
+      "origin_date": "2026-02-23",
+      "window": "2026-02-24 to 2026-03-09",
+      "sku_count": 40,
+      "naive_wape": 0.178,
+      "amplified_wape": 0.1391,
+      "lift_vs_naive_pct": 21.83
+    },
+    {
+      "fold": 2,
+      "label": "Raksha Bandhan 2026 Pre-Surge",
+      "origin_date": "2026-08-19",
+      "window": "2026-08-20 to 2026-09-02",
+      "sku_count": 40,
+      "naive_wape": 0.1506,
+      "amplified_wape": 0.087,
+      "lift_vs_naive_pct": 42.26
+    },
+    {
+      "fold": 3,
+      "label": "Navratri 2026 Pre-Surge",
+      "origin_date": "2026-10-03",
+      "window": "2026-10-04 to 2026-10-17",
+      "sku_count": 40,
+      "naive_wape": 0.1799,
+      "amplified_wape": 0.1434,
+      "lift_vs_naive_pct": 20.29
+    }
+  ],
+  "gates": {
+    "all_passed": true,
+    "checks": {
+      "a_item_wape_le_12pct": {
+        "passed": true,
+        "actual": 0.1019,
+        "threshold": 0.12
+      },
+      "b_item_wape_le_18pct": {
+        "passed": true,
+        "actual": 0.127,
+        "threshold": 0.18
+      },
+      "c_item_wape_le_30pct_or_mase_lt_1": {
+        "passed": true,
+        "actual_wape": 0.3744,
+        "actual_mase": 0.9692,
+        "threshold": "WAPE <= 0.30 or MASE < 1.0"
+      },
+      "aggregate_revenue_wape_le_15pct": {
+        "passed": true,
+        "actual": 0.1231,
+        "threshold": 0.15
+      },
+      "lift_over_seasonal_naive_ge_20pct": {
+        "passed": true,
+        "actual_pct": 27.37,
+        "threshold_pct": 20.0
+      },
+      "conformal_p90_coverage_85_to_95pct": {
+        "passed": true,
+        "actual": 0.9167,
+        "threshold": [
+          0.85,
+          0.95
+        ]
+      }
+    }
+  }
+}
