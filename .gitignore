@@ -53,3 +53,12 @@ out/
 # OS artifacts
 .DS_Store
 Thumbs.db
+
+# Local hackathon reference & agent skill folders
+.agents/
+skills-lock.json
+Event/
+Gemini_Research/
+Our_Project/
+Themes_& Problem_Statements/
+

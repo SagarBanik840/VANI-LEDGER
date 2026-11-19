@@ -53,13 +53,10 @@ VANI-LEDGER/
 ├── README.md                                 # Project overview & Rule 38 credits
 ├── AGENTS.md                                 # Canonical build & security guardrails
 ├── docs/
-│   └── ARCHITECTURE_AND_EXECUTION_PLAN.md    # Authoritative architecture, ML & 5h build plan
+│   ├── ARCHITECTURE_AND_EXECUTION_PLAN.md    # Authoritative architecture, ML & 5h build plan
+│   └── ML_STEP_BY_STEP_GUIDE.md              # Supervised ML, 5-Stage Amplification & SHAP guide
 ├── ppt/
 │   └── VANI_LEDGER.pptx                      # Official 12-slide hackathon deck
-├── Event/                                    # Official Aarambhathon 2.0 Rule Book & PPT format
-├── Themes_& Problem_Statements/              # Official PS 01 specification
-├── Our_Project/                              # Archived early proposals & design references
-├── Gemini_Research/                          # Archived pre-PS01 architectural brainstorm
 └── implementation/                           # Archived 30h handoff, security reference & draft session plan
 ```
 
